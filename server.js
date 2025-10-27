@@ -2,7 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
-
+// THÊM DÒNG NÀY ĐỂ KIỂM TRA
+console.log("JWT Secret đã tải:", process.env.JWT_SECRET);
 const app = express();
 
 // Middleware

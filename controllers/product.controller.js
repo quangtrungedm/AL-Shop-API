@@ -52,3 +52,24 @@ exports.deleteProduct = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// HÀM MỚI: Lấy nhiều sản phẩm theo mảng ID
+exports.getProductsByIds = async (req, res) => {
+    try {
+        const { ids } = req.query; // "?ids=id1,id2,id3"
+
+        if (!ids) {
+            return res.status(400).json({ success: false, message: 'Không có ID nào được cung cấp' });
+        }
+
+        const idArray = ids.split(',');
+        const products = await Product.find({
+            '_id': { $in: idArray }
+        });
+
+        res.status(200).json({ success: true, data: products });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
