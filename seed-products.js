@@ -5,14 +5,14 @@ const Product = require('./models/Product.model');
 
 dotenv.config();
 
-// Dữ liệu sản phẩm mẫu
+// Dữ liệu sản phẩm mẫu (ảnh từ Unsplash)
 const sampleProducts = [
   {
     name: 'POLK DRESS',
     description: 'Áo thun họa tiết chấm bi',
     price: 75.00,
     category: 'T-Shirt',
-    image: 'https://product.hstatic.net/200000690725/product/1_92c3e628087d4bdaa9bc1ed9b1fb1f5c_master.jpg',
+    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500',
     stock: 50
   },
   {
@@ -20,7 +20,7 @@ const sampleProducts = [
     description: 'Áo thun đen basic',
     price: 35.00,
     category: 'T-Shirt',
-    image: 'https://product.hstatic.net/200000690725/product/50bls_2_5bf9ccfd99ad4b5e858666f8c1b77a5e_master.jpg',
+    image: 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500',
     stock: 100
   },
   {
@@ -28,7 +28,7 @@ const sampleProducts = [
     description: 'Áo thun trắng trơn',
     price: 33.00,
     category: 'T-Shirt',
-    image: 'https://product.hstatic.net/200000690725/product/50wtb_2_8e0e91d5c8bf49f5b29a5a61968bf1e8_master.jpg',
+    image: 'https://images.unsplash.com/photo-1622445275576-721325763afe?w=500',
     stock: 80
   },
   {
@@ -36,7 +36,7 @@ const sampleProducts = [
     description: 'Áo thun họa tiết màu be',
     price: 28.00,
     category: 'T-Shirt',
-    image: 'https://product.hstatic.net/200000690725/product/2_7a6f3e2c84794e5b8b2c2c4e6b0d8c8f_master.jpg',
+    image: 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=500',
     stock: 60
   },
   {
@@ -44,7 +44,7 @@ const sampleProducts = [
     description: 'Áo polo đen cao cấp',
     price: 55.00,
     category: 'Polo',
-    image: 'https://product.hstatic.net/200000690725/product/black-polo_master.jpg',
+    image: 'https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=500',
     stock: 40
   },
   {
@@ -52,7 +52,7 @@ const sampleProducts = [
     description: 'Quần short xanh navy',
     price: 45.00,
     category: 'Short',
-    image: 'https://product.hstatic.net/200000690725/product/navy-short_master.jpg',
+    image: 'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=500',
     stock: 55
   }
 ];
