@@ -17,4 +17,13 @@ mn thay username:passworld --- quangtrung:quangtrung123
 
 npm run dev
 
+======================
+30/10/2023
+Khi IP máy thay đổi:
+1. Kt ip máy là gì , thay ip của máy  ,thay ip đó vào trong DO_AN-SHOP-AI/api/client.js,thay tiếp trong AL-Shop/server.js (dòng console.log)
+
+Nếu thêm sản phẩm mới 
+Sửa thêm - xoá trong seed-products.js
+Chạy: node seed-products.js
+Frontend sẽ tự động load sản phẩm mới .
 
