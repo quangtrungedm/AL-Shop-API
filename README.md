@@ -10,6 +10,8 @@ npm install
 
 PORT=5000
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/al-shop
+EMAIL_USER= email
+EMAIL_PASS= key email
 
 mn thay username:passworld --- quangtrung:quangtrung123
 
