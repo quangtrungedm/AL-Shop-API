@@ -2,8 +2,11 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
 
+// http://localhost:5000/api/users/register
 router.post('/register', userController.register);
+// http://localhost:5000/api/users
 router.get('/', userController.getUsers);
+// http://localhost:5000/api/users/
 router.post('/', userController.createUser);
 router.get('/:id', userController.getUserById);
 router.put('/:id', userController.updateUser);
