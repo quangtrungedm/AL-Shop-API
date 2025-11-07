@@ -4,28 +4,31 @@ const userController = require('../controllers/user.controller');
 // IMPORT MIDDLEWARE
 const { authMiddleware } = require('../middleware/auth'); 
 
-// === CÁC ROUTE VỀ XÁC THỰC (Auth) ===
+// --- CÁC ROUTE XÁC THỰC (Auth) ---
 router.post('/register', userController.register);
 router.post('/login', userController.loginUser);
 
-// === CÁC ROUTE QUÊN MẬT KHẨU ===
+// --- CÁC ROUTE QUÊN MẬT KHẨU ---
 router.post('/forgot-password', userController.forgotPassword);
 router.post('/verify-otp', userController.verifyOtp);
 router.post('/set-new-password', userController.setNewPassword);
 
+// --- YÊU THÍCH (Favorites) ---
+// 💡 QUAN TRỌNG: Đặt các route tĩnh này LÊN TRÊN route động /:id
+router.post('/favorite/toggle', authMiddleware, userController.toggleFavorite);
+router.get('/favorites', authMiddleware, userController.getFavorites); 
 
-// === CÁC ROUTE QUẢN LÝ USER (CRUD) ===
-router.get('/', userController.getUsers);
-router.get('/:id', userController.getUserById);
+// --- CÁC ROUTE QUẢN LÝ USER (CRUD) ---
+// Route tĩnh: Lấy danh sách users
+router.get('/', userController.getUsers); 
 
-// ROUTE CẬP NHẬT (SẼ XỬ LÝ PHONE VÀ ADDRESS)
+// Route động: Cập nhật user theo ID
 router.put('/:id', authMiddleware, userController.updateUser); 
 
+// Route động: Xóa user theo ID
 router.delete('/:id', authMiddleware, userController.deleteUser); 
 
-
-// === YÊU THÍCH (Favorites) ===
-router.post('/favorite/toggle', authMiddleware, userController.toggleFavorite);
-router.get('/favorites', authMiddleware, userController.getFavorites);
+// Route động: Lấy thông tin 1 user theo ID
+router.get('/:id', userController.getUserById); // ✅ Đặt route động /:id này ở vị trí cuối
 
 module.exports = router;
