@@ -14,21 +14,20 @@ router.post('/verify-otp', userController.verifyOtp);
 router.post('/set-new-password', userController.setNewPassword);
 
 // --- YÊU THÍCH (Favorites) ---
-// 💡 QUAN TRỌNG: Đặt các route tĩnh này LÊN TRÊN route động /:id
+// ✅ Các route tĩnh phải ở trên route động
 router.post('/favorite/toggle', authMiddleware, userController.toggleFavorite);
 router.get('/favorites', authMiddleware, userController.getFavorites); 
 
 // --- CÁC ROUTE QUẢN LÝ USER (CRUD) ---
-// Route tĩnh: Lấy danh sách users
+
+// Route 1: Lấy danh sách users (GET /api/users) - Route tĩnh
 router.get('/', userController.getUsers); 
 
-// Route động: Cập nhật user theo ID
-router.put('/:id', authMiddleware, userController.updateUser); 
-
-// Route động: Xóa user theo ID
-router.delete('/:id', authMiddleware, userController.deleteUser); 
-
-// Route động: Lấy thông tin 1 user theo ID
-router.get('/:id', userController.getUserById); // ✅ Đặt route động /:id này ở vị trí cuối
+// Route động: Cập nhật, Xóa, và Lấy thông tin 1 user theo ID
+router
+    .route('/:id') // Định nghĩa route động /:id một lần duy nhất
+    .get(userController.getUserById)         // GET /api/users/:id
+    .put(authMiddleware, userController.updateUser)   // PUT /api/users/:id
+    .delete(authMiddleware, userController.deleteUser); // DELETE /api/users/:id
 
 module.exports = router;
