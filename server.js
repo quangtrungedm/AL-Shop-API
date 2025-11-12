@@ -1,10 +1,10 @@
-// [File] server.js
+// [File] server.js (Phiên bản Hoàn Chỉnh và Sửa Lỗi Thứ Tự)
 
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors'); // ⭐️ FIX 1: Đã require thư viện cors
+const cors = require('cors'); 
 const path = require('path'); 
-const multer = require('multer'); // ⭐️ THÊM: Cần để bắt lỗi Multer
+const multer = require('multer'); 
 
 require('dotenv').config();
 
@@ -12,32 +12,39 @@ require('dotenv').config();
 const userRoutes = require('./routes/user.routes');
 const productRoutes = require('./routes/product.routes');
 const orderRoutes = require('./routes/order.routes');
-const uploadRoutes = require('./routes/upload.routes'); // Route upload file
+const uploadRoutes = require('./routes/upload.routes'); 
 
 // --- KHỞI TẠO APP EXPRESS ---
-const app = express(); // ⭐️ FIX 2: Khai báo app trước khi sử dụng
+const app = express(); 
 
-// Logging (Kiểm tra biến môi trường)
 console.log("JWT Secret đã tải:", process.env.JWT_SECRET ? '✅ Đã tải' : '❌ Lỗi chưa tải');
 
 
 // --- MIDDLEWARE VÀ THỨ TỰ QUAN TRỌNG NHẤT ---
 
+// 1. DEBUG VÀ CORS
+app.use((req, res, next) => {
+    if (!req.url.startsWith('/uploads')) {
+        console.log(`DEBUG SERVER: REQUEST RECEIVED -> ${req.method} ${req.url}`);
+    }
+    next();
+});
 app.use(cors());
 
-// ⭐️ FIX 3: ĐẶT ROUTE UPLOAD FILE TRƯỚC express.json()
-// Multer phải được chạy trước để xử lý multipart/form-data, tránh bị express.json() làm hỏng body
+
+// 2. BODY PARSERS (Rất quan trọng cho API)
+// Đặt Body Parser lên trên cùng để nó xử lý body JSON cho TẤT CẢ các route API
+app.use(express.json()); 
+
+
+// 3. CÁC ROUTES API CHÍNH (PHẢI NẰM Ở ĐÂY ĐỂ NGĂN CHẶN FALLBACK)
+app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes); 
+app.use('/api/orders', orderRoutes);
 app.use('/api/upload', uploadRoutes); 
 
-// Body Parser cho các route còn lại (JSON data)
-app.use(express.json());
 
-// Cấu hình phục vụ File Tĩnh (ẢNH)
-// File ảnh sẽ được truy cập qua /uploads/...
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'))); 
-
-// --- CÁC ROUTES CÒN LẠI ---
-
+// 4. ROUTE HOME (Root API)
 app.get('/', (req, res) => {
     res.json({
         message: 'AL-Shop API',
@@ -51,31 +58,40 @@ app.get('/', (req, res) => {
     });
 });
 
-app.use('/api/users', userRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/orders', orderRoutes);
+
+// 5. PHỤC VỤ FILE TĨNH (Sau các route API)
+// Phục vụ File Tĩnh (ẢNH)
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'))); 
+
+
+// 6. FIX LỖI 404 API FALLBACK (Trả về JSON khi API không khớp)
+app.use('/api/*', (req, res) => {
+    console.log(`DEBUG FALLBACK: API NOT FOUND -> ${req.path}`); 
+    res.status(404).json({
+        success: false,
+        message: `API Endpoint không tìm thấy: ${req.path}`
+    });
+});
 
 
 // --- KẾT NỐI MONGODB ---
 
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('--> ✅ Đã kết nối MongoDB'))
-  .catch(err => console.log('❌ Lỗi kết nối MongoDB:', err));
+    .then(() => console.log('--> ✅ Đã kết nối MongoDB'))
+    .catch(err => console.log('❌ Lỗi kết nối MongoDB:', err));
 
 
 // --- ERROR HANDLING CUỐI CÙNG ---
 
 app.use((err, req, res, next) => {
     
-    // ⭐️ Bắt lỗi Multer (ví dụ: File quá lớn, tên trường sai)
     if (err instanceof multer.MulterError) {
         return res.status(400).json({ 
             success: false, 
-            message: `Lỗi tải file: ${err.message}. Kiểm tra kích thước file hoặc tên trường (phải là 'avatar').` 
+            message: `Lỗi tải file: ${err.message}. Kiểm tra kích thước file hoặc tên trường.` 
         });
     }
 
-    // Bắt lỗi từ fileFilter trong middleware/upload.js (định dạng ảnh)
     if (err.message === 'Chỉ chấp nhận file ảnh (JPG, JPEG, PNG).') {
         return res.status(400).json({ 
             success: false, 
@@ -83,16 +99,24 @@ app.use((err, req, res, next) => {
         });
     }
     
-    // Xử lý lỗi chung (Lỗi 500)
     console.error(err.stack);
     res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi Server nội bộ không xác định.' });
 });
 
 
+// UNIVERSAL FALLBACK (Trả về JSON khi không tìm thấy tài nguyên)
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Không tìm thấy tài nguyên cho đường dẫn: ${req.url}`
+    });
+});
+
+
 // --- KHỞI ĐỘNG SERVER ---
 
-const PORT = process.env.PORT || 5001; // Sửa lỗi chính tả POƯRT -> PORT
+const PORT = process.env.PORT || 4000; 
 
 app.listen(PORT, () => {
-  console.log(`\n--> 🚀 Server đang chạy tại http://localhost:${PORT}`);
+    console.log(`\n--> 🚀 Server đang chạy tại http://localhost:${PORT}`);
 });

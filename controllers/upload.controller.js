@@ -1,14 +1,10 @@
-// [File] controllers/upload.controller.js
+// [File] controllers/upload.controller.js (Đã fix lỗi URL kép)
 
 const path = require('path');
-// const User = require('../models/User.model'); // Uncomment nếu bạn muốn update DB tại đây
 
-/**
- * Xử lý file đã được Multer upload.
- */
 const uploadAvatar = async (req, res) => {
     
-    // 1. Kiểm tra xem Multer có xử lý file thành công không
+    
     if (!req.file) {
         return res.status(400).json({ 
             success: false, 
@@ -17,24 +13,22 @@ const uploadAvatar = async (req, res) => {
     }
 
     // Lấy ID người dùng từ Auth Middleware
-    const userId = req.user && req.user.id ? req.user.id : 'guest';
+    // const userId = req.user && req.user.id ? req.user.id : 'guest'; // Giữ nguyên logic này
 
-    // 2. Tạo URL công khai 
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    
-    // URL công khai: BASE_URL/uploads/avatars/ten_file.jpg
-    const publicUrl = `${baseUrl}/uploads/avatars/${req.file.filename}`;
+    // ⭐️ FIX: Trả về URL TƯƠNG ĐỐI (Relateive URL)
+    // Frontend (account-settings.js) sẽ tự thêm Base URL (http://localhost:4000) vào
+    const relativeUrl = `/uploads/avatars/${req.file.filename}`;
     
     // 3. Trả về URL ảnh mới cho Frontend
     res.status(200).json({
         success: true,
         message: 'Upload ảnh thành công.',
-        url: publicUrl,
+        url: relativeUrl, // ⭐️ Chỉ trả về phần tương đối
         filename: req.file.filename
     });
 };
 
-// ⭐️ EXPORT CHUẨN ĐỂ KHỚP VỚI IMPORT DESTRUCTURING TRONG ROUTES
+
 module.exports = {
     uploadAvatar
 };
