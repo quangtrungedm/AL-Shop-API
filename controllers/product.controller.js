@@ -73,3 +73,27 @@ exports.getProductsByIds = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+exports.createProduct = async (req, res) => {
+    try {
+        const product = await Product.create(req.body);
+
+        // ⭐️ THÊM LOGIC TẠO THÔNG BÁO SẢN PHẨM MỚI ⭐️
+        
+        // Giả định: Tìm admin (hoặc tất cả users) để gửi thông báo
+        const adminUser = await User.findOne({ role: 'admin' });
+        
+        if (adminUser) {
+            await createNotification({
+                userId: adminUser._id, // Gửi thông báo đến Admin
+                title: `Sản phẩm mới đã được thêm: ${product.name}`,
+                description: `Sản phẩm ${product.name} (ID: ${product._id.toString().slice(-6)}) đã được thêm thành công vào danh mục.`,
+                type: 'NEW_PRODUCT',
+                referenceId: product._id,
+            });
+        }
+
+        res.status(201).json({ success: true, data: product });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};

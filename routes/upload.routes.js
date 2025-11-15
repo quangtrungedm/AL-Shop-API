@@ -3,20 +3,17 @@
 const express = require('express');
 const router = express.Router();
 
-// ⭐️ IMPORT BẮT BUỘC:
-const { authMiddleware } = require('../middleware/auth'); 
-const uploadMiddleware = require('../middleware/upload');
+// Lấy hàm middleware và controller
+const { isAuth } = require('../middleware/auth'); 
+const { singleAvatarUpload } = require('../middleware/upload'); 
+const { uploadAvatar } = require('../controllers/upload.controller'); 
 
-// ⭐️ SỬA: Dùng destructuring để import hàm từ controller
-const { uploadAvatar } = require('../controllers/upload.controller');
-
-
-// POST /api/upload/avatar: Chọn/upload ảnh Avatar
+// POST /api/upload/avatar (Dòng 12)
 router.post(
-    '/avatar', 
-    authMiddleware,       // 1. Xác thực (req.user)
-    uploadMiddleware,     // 2. Xử lý file (req.file)
-    uploadAvatar          // ⭐️ Hàm xử lý (callback function)
+    '/avatar', 
+    isAuth,               // Middleware 1
+    singleAvatarUpload,   // Middleware 2 (Lỗi xảy ra nếu singleAvatarUpload là undefined)
+    uploadAvatar          // Controller
 );
 
 module.exports = router;

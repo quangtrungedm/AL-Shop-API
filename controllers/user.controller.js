@@ -5,14 +5,13 @@ const Product = require('../models/Product.model');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const PasswordReset = require('../models/PasswordReset.model');
-// ⭐️ Sử dụng tên hàm 'sendEmail' đã được export từ helpers
+
 const { sendEmail } = require('../helpers/send-email'); 
 
-
-// --- HÀM XÁC THỰC VÀ ĐĂNG NHẬP (Không đổi) ---
+// --- HÀM XÁC THỰC VÀ ĐĂNG NHẬP ---
 
 // Register
-exports.register = async (req, res) => {
+const register = async (req, res) => { // Đã sửa: dùng const
     try {
         const { name, email, password } = req.body;
         if (!name || !email || !password) {
@@ -37,7 +36,7 @@ exports.register = async (req, res) => {
 };
 
 // Đăng nhập
-exports.loginUser = async (req, res) => {
+const loginUser = async (req, res) => { // Đã sửa: dùng const
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email });
@@ -67,10 +66,10 @@ exports.loginUser = async (req, res) => {
     }
 };
 
-// --- HÀM QUÊN MẬT KHẨU (TÍCH HỢP SENDGRID) ---
+// --- HÀM QUÊN MẬT KHẨU ---
 
 // (POST) /api/users/forgot-password
-exports.forgotPassword = async (req, res) => {
+const forgotPassword = async (req, res) => { // Đã sửa: dùng const
     const { email } = req.body;
     
     if (!email) {
@@ -80,7 +79,7 @@ exports.forgotPassword = async (req, res) => {
     try {
         const user = await User.findOne({ email });
 
-        // ⚠️ Bảo mật: Nếu không tìm thấy user, vẫn trả về thành công
+
         if (!user) {
             return res.status(200).json({ 
                 success: true, 
@@ -88,25 +87,27 @@ exports.forgotPassword = async (req, res) => {
             });
         }
 
-        // 1. Tạo OTP và thời gian hết hạn (5 phút)
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = Date.now() + 5 * 60000; // 5 phút tính bằng milliseconds
 
-        // 2. Xóa OTP cũ và tạo/cập nhật OTP mới vào DB
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = Date.now() + 5 * 60000; // 5 phút
+
+
+
+        
         await PasswordReset.findOneAndUpdate(
             { email },
             { otp: otp, expiresAt: expiresAt, verified: false },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         
-        // 3. Chuẩn bị nội dung email
+
         const emailContent = `
             <h1>Mã xác nhận Đặt lại mật khẩu AL-Shop</h1>
             <p>Mã OTP của bạn là: <strong>${otp}</strong></p>
             <p>Mã này sẽ hết hạn trong 5 phút. Vui lòng không chia sẻ.</p>
         `;
 
-        // 4. Gửi email qua SendGrid
+
         const emailSent = await sendEmail({
             to: email,
             subject: 'Mã OTP Đặt lại mật khẩu AL-Shop',
@@ -132,7 +133,7 @@ exports.forgotPassword = async (req, res) => {
 };
 
 // (POST) /api/users/verify-otp
-exports.verifyOtp = async (req, res) => {
+const verifyOtp = async (req, res) => { // Đã sửa: dùng const
     try {
         const { email, otp } = req.body;
         if (!email || !otp) return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ email và OTP.' });
@@ -140,16 +141,14 @@ exports.verifyOtp = async (req, res) => {
         const now = Date.now();
         const reset = await PasswordReset.findOne({ email, otp });
         
-        // ⭐️ DEBUG VERIFY 1: Kiểm tra xem bản ghi có được tìm thấy không
-        console.log(`DEBUG VERIFY: Finding OTP for ${email}. Found: ${reset ? 'Có' : 'Không'}`);
-        
+    
         if (!reset) {
-             return res.status(400).json({ success: false, message: 'OTP không hợp lệ.' });
+            return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ hoặc đã hết hạn.' });
         }
         
         if (reset.expiresAt < now) {
             console.log(`DEBUG VERIFY: OTP ${otp} đã hết hạn.`);
-            await PasswordReset.deleteMany({ email }); // Xóa OTP hết hạn
+            await PasswordReset.deleteMany({ email });
             return res.status(400).json({ success: false, message: 'OTP đã hết hạn. Vui lòng yêu cầu OTP mới.' });
         }
         
@@ -157,7 +156,7 @@ exports.verifyOtp = async (req, res) => {
             return res.status(400).json({ success: false, message: 'OTP đã được xác minh trước đó.' });
         }
 
-        // Xác minh thành công
+
         reset.verified = true;
         await reset.save();
         console.log(`DEBUG VERIFY: OTP ${otp} cho ${email} đã được xác minh thành công và lưu vào DB.`);
@@ -171,46 +170,47 @@ exports.verifyOtp = async (req, res) => {
 };
 
 // (POST) /api/users/set-new-password
-exports.setNewPassword = async (req, res) => {
-    // ⭐️ DEBUG SET_PASS 1: Kiểm tra dữ liệu nhận được từ Frontend
+const setNewPassword = async (req, res) => { // Đã sửa: dùng const
+
     console.log("DEBUG SET_PASS: received body:", req.body);
     
     try {
-        const { email, newPassword } = req.body;
+        const { email, newPassword } = req.body; 
         
         if (!email || !newPassword) {
             console.log("DEBUG SET_PASS: Lỗi 400 - Thiếu email hoặc newPassword.");
             return res.status(400).json({ success: false, message: 'Vui lòng nhập email và mật khẩu mới.' });
         }
 
-        // ⭐️ DEBUG SET_PASS 2: Kiểm tra bản ghi OTP sau khi tìm kiếm
+
         const reset = await PasswordReset.findOne({ email, verified: true });
         console.log(`DEBUG SET_PASS: PasswordReset record found (verified: true): ${reset ? 'Có' : 'Không'}`);
         
-        // 1. Kiểm tra trạng thái đã xác minh
+
         if (!reset) {
-            console.log("DEBUG SET_PASS: Lỗi 400 - OTP chưa được xác thực (verified != true) hoặc đã hết hạn.");
-            return res.status(400).json({ success: false, message: 'Yêu cầu đặt lại mật khẩu không hợp lệ hoặc chưa xác thực OTP.' });
+            console.log("DEBUG SET_PASS: Lỗi 400 - Yêu cầu đặt lại mật khẩu không hợp lệ.");
+            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.' });
         }
 
-        // 2. Kiểm tra lại thời gian hết hạn (Phòng trường hợp OTP hết hạn sau khi verify)
+
         const now = Date.now();
         if (reset.expiresAt < now) {
-             console.log("DEBUG SET_PASS: Lỗi 400 - Phiên đã hết hạn.");
-             await PasswordReset.deleteMany({ email });
-             return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.' });
+            console.log("DEBUG SET_PASS: Lỗi 400 - Phiên đã hết hạn.");
+            await PasswordReset.deleteMany({ email });
+            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.' });
         }
         
-        // 3. Cập nhật mật khẩu
+
         const user = await User.findOne({ email });
         if (!user) {
-             return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản để cập nhật.' });
+            await PasswordReset.deleteMany({ email });
+            return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản để cập nhật.' });
         }
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
         
-        // 4. Xóa bản ghi PasswordReset sau khi thành công
+
         await PasswordReset.deleteMany({ email });
         console.log(`DEBUG SET_PASS: Mật khẩu của ${email} đã đổi thành công. Reset record đã xóa.`);
 
@@ -221,10 +221,10 @@ exports.setNewPassword = async (req, res) => {
     }
 };
 
-// --- CÁC HÀM QUẢN LÝ USER VÀ YÊU THÍCH (Không đổi) ---
+// --- CÁC HÀM QUẢN LÝ USER VÀ YÊU THÍCH ---
 
 // Lấy danh sách users
-exports.getUsers = async (req, res) => {
+const getUsers = async (req, res) => { // Đã sửa: dùng const
     try {
         const users = await User.find().select('-password');
         res.json({ success: true, data: users });
@@ -235,7 +235,7 @@ exports.getUsers = async (req, res) => {
 };
 
 // Lấy thông tin 1 user
-exports.getUserById = async (req, res) => {
+const getUserById = async (req, res) => { // Đã sửa: dùng const
     try {
         const user = await User.findById(req.params.id).select('-password');
         if (!user) {
@@ -249,7 +249,7 @@ exports.getUserById = async (req, res) => {
 };
 
 // CẬP NHẬT HÀM updateUser
-exports.updateUser = async (req, res) => {
+const updateUser = async (req, res) => { // Đã sửa: dùng const
     try {
         const userId = req.params.id;
         const { name, email, phone, address, avatar } = req.body;
@@ -291,7 +291,7 @@ exports.updateUser = async (req, res) => {
 };
 
 // Xóa user
-exports.deleteUser = async (req, res) => {
+const deleteUser = async (req, res) => { // Đã sửa: dùng const
     try {
         await User.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: 'Đã xóa user' });
@@ -303,7 +303,7 @@ exports.deleteUser = async (req, res) => {
 
 
 // Thêm/Xóa sản phẩm khỏi danh sách yêu thích
-exports.toggleFavorite = async (req, res) => {
+const toggleFavorite = async (req, res) => { // Đã sửa: dùng const
     try {
         const userId = req.user?._id; 
         const { productId } = req.body;
@@ -345,7 +345,7 @@ exports.toggleFavorite = async (req, res) => {
 };
 
 // Lấy danh sách yêu thích
-exports.getFavorites = async (req, res) => {
+const getFavorites = async (req, res) => { // Đã sửa: dùng const
     try {
         const userId = req.user?._id; 
 
@@ -365,4 +365,19 @@ exports.getFavorites = async (req, res) => {
         console.error("ERROR: getFavorites failed (500):", error);
         res.status(500).json({ success: false, message: 'Lỗi server khi tải danh sách yêu thích.' });
     }
+};
+
+// ⭐️ ĐẢM BẢO TẤT CẢ CÁC HÀM ĐƯỢC XUẤT RA ⭐️
+module.exports = {
+    register,
+    loginUser,
+    forgotPassword,
+    verifyOtp,
+    setNewPassword,
+    toggleFavorite,
+    getFavorites,
+    getUsers,
+    getUserById,
+    updateUser,
+    deleteUser,
 };

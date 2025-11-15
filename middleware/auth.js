@@ -1,8 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model'); 
 
-exports.authMiddleware = async (req, res, next) => {
-    // DEBUG 1: Log header Authorization
+const isAuth = async (req, res, next) => {
     console.log("DEBUG AUTH: Auth Header received:", req.headers.authorization);
     
     const authHeader = req.headers.authorization;
@@ -12,11 +11,12 @@ exports.authMiddleware = async (req, res, next) => {
         token = authHeader.split(' ')[1];
     }
 
-    if (!token) {
-        console.error("DEBUG AUTH: Token missing or format invalid. Returning 401."); 
+    // ⭐️ FIX LỖI: Kiểm tra token rỗng, null, hoặc chuỗi "undefined" ⭐️
+    if (!token || token === 'undefined') { 
+        console.error("DEBUG AUTH: Token missing, empty, or 'undefined'. Returning 401."); 
         return res.status(401).json({ 
             success: false, 
-            message: 'Không có token, từ chối truy cập.' 
+            message: 'Không có mã xác thực hoặc mã không hợp lệ.' 
         });
     }
 
@@ -24,7 +24,6 @@ exports.authMiddleware = async (req, res, next) => {
         // Giải mã token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        // DEBUG 2: Log ID User sau khi giải mã
         console.log("DEBUG AUTH: Token decoded successfully for User ID:", decoded.id);
         
         // Tìm user và loại trừ password
@@ -38,20 +37,21 @@ exports.authMiddleware = async (req, res, next) => {
             });
         }
         
-        // Gắn object user (có thuộc tính _id) vào req
         req.user = user;
         
-        // DEBUG 3: Xác nhận thành công và chuyển tiếp
         console.log(`DEBUG AUTH: User ${user._id} authenticated. Proceeding to controller.`);
         next(); 
         
     } catch (error) {
-        // Xử lý lỗi JWT (Token hết hạn, sai chữ ký, format sai)
-        let message = 'Token không hợp lệ hoặc đã hết hạn.';
+        // ⭐️ FIX LỖI: Xử lý lỗi JWT cho các trường hợp cụ thể ⭐️
+        let message;
         if (error.name === 'TokenExpiredError') {
             message = 'Token đã hết hạn.';
         } else if (error.name === 'JsonWebTokenError') {
-            message = 'Token không hợp lệ.';
+             // Bắt các lỗi format sai, chữ ký sai, hoặc token là chuỗi rỗng
+            message = 'Token không hợp lệ (Sai định dạng/Chữ ký).'; 
+        } else {
+             message = 'Lỗi xác thực không xác định.';
         }
         
         console.error("DEBUG AUTH FAILED:", error.message);
@@ -60,4 +60,8 @@ exports.authMiddleware = async (req, res, next) => {
             message: message 
         });
     }
+};
+
+module.exports = {
+    isAuth,
 };

@@ -4,25 +4,24 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Đảm bảo thư mục lưu trữ tồn tại
-// Tên thư mục cần phải chính xác
+// --- 1. Đảm bảo thư mục tồn tại ---
 const AVATARS_DIR = path.join(__dirname, '../public/uploads/avatars');
 
 if (!fs.existsSync(AVATARS_DIR)) {
-    // Nếu thư mục chưa có, tạo mới (recursive: true giúp tạo cả các thư mục cha nếu cần)
+    // Sử dụng recursive: true để tạo các thư mục con nếu cần
     fs.mkdirSync(AVATARS_DIR, { recursive: true });
 }
 
-// Cấu hình nơi lưu trữ và tên file
+// --- 2. Cấu hình nơi lưu trữ và tên file (diskStorage) ---
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        // Nơi lưu trữ cuối cùng: public/uploads/avatars
+        // Luôn trả về thư mục lưu trữ đã được kiểm tra
         cb(null, AVATARS_DIR); 
     },
     filename: function (req, file, cb) {
-        // Lấy userId từ token (sau khi authMiddleware chạy)
-        // Nếu không có req.user, sử dụng 'guest'
-        const userId = req.user && req.user.id ? req.user.id : 'guest';
+        // Multer chạy sau isAuth, nên req.user đã tồn tại (nếu xác thực thành công).
+        // Dùng .toString() cho _id để đảm bảo nó là chuỗi.
+        const userId = req.user && req.user._id ? req.user._id.toString() : 'guest';
         const uniqueSuffix = Date.now();
         const ext = path.extname(file.originalname);
         
@@ -31,7 +30,8 @@ const storage = multer.diskStorage({
     }
 });
 
-// Cấu hình Multer: chấp nhận 1 file ảnh có tên 'avatar'
+
+// --- 3. Cấu hình Multer ---
 const upload = multer({ 
     storage: storage,
     limits: { fileSize: 2 * 1024 * 1024 }, // Giới hạn kích thước 2MB
@@ -43,10 +43,15 @@ const upload = multer({
         if (mimeType && extName) {
             return cb(null, true);
         } else {
-            // Xử lý lỗi file không đúng định dạng
+            // Lỗi này sẽ được Multer xử lý và chuyển xuống next(err)
             cb(new Error('Chỉ chấp nhận file ảnh (JPG, JPEG, PNG).'));
         }
     }
-}).single('avatar'); // Tên trường file trong FormData từ Frontend là 'avatar'
+});
 
-module.exports = upload;
+// --- 4. Export Middleware ---
+// Multer function đã được cấu hình cho việc upload 1 file (single) với field name là 'avatar'
+const singleAvatarUpload = upload.single('avatar'); 
+
+// Xuất dưới dạng đối tượng (cách bạn đã làm)
+module.exports = { singleAvatarUpload };
