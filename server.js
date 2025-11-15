@@ -13,7 +13,8 @@ const userRoutes = require('./routes/user.routes');
 const productRoutes = require('./routes/product.routes');
 const orderRoutes = require('./routes/order.routes');
 const uploadRoutes = require('./routes/upload.routes'); // Route upload file
-
+const addressRoutes = require('./routes/address.routes');
+const notificationRoutes = require('./routes/notification.routes');
 // --- KHỞI TẠO APP EXPRESS ---
 const app = express(); // ⭐️ FIX 2: Khai báo app trước khi sử dụng
 
@@ -54,8 +55,8 @@ app.get('/', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
-
-
+app.use('/api/addresses', addressRoutes);
+app.use('/api/notifications', notificationRoutes);
 // --- KẾT NỐI MONGODB ---
 
 mongoose.connect(process.env.MONGODB_URI)

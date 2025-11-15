@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
-// IMPORT MIDDLEWARE
-const { authMiddleware } = require('../middleware/auth'); 
+// ĐÃ SỬA: Import 'isAuth' để khớp với export trong middleware/auth.js
+const { isAuth } = require('../middleware/auth'); 
 
 // --- CÁC ROUTE XÁC THỰC (Auth) ---
 router.post('/register', userController.register);
@@ -14,9 +14,9 @@ router.post('/verify-otp', userController.verifyOtp);
 router.post('/set-new-password', userController.setNewPassword);
 
 // --- YÊU THÍCH (Favorites) ---
-// ✅ Các route tĩnh phải ở trên route động
-router.post('/favorite/toggle', authMiddleware, userController.toggleFavorite);
-router.get('/favorites', authMiddleware, userController.getFavorites); 
+// SỬ DỤNG isAuth đã import
+router.post('/favorite/toggle', isAuth, userController.toggleFavorite);
+router.get('/favorites', isAuth, userController.getFavorites); 
 
 // --- CÁC ROUTE QUẢN LÝ USER (CRUD) ---
 
@@ -25,9 +25,10 @@ router.get('/', userController.getUsers);
 
 // Route động: Cập nhật, Xóa, và Lấy thông tin 1 user theo ID
 router
-    .route('/:id') // Định nghĩa route động /:id một lần duy nhất
-    .get(userController.getUserById)         // GET /api/users/:id
-    .put(authMiddleware, userController.updateUser)   // PUT /api/users/:id
-    .delete(authMiddleware, userController.deleteUser); // DELETE /api/users/:id
+    .route('/:id') // Định nghĩa route động /:id một lần duy nhất
+    .get(userController.getUserById)         // GET /api/users/:id
+    // SỬ DỤNG isAuth đã import
+    .put(isAuth, userController.updateUser)   // PUT /api/users/:id
+    .delete(isAuth, userController.deleteUser); // DELETE /api/users/:id
 
 module.exports = router;
