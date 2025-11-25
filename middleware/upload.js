@@ -4,9 +4,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// --- 1. Đảm bảo thư mục tồn tại ---
+// Đường dẫn tuyệt đối đến thư mục lưu trữ avatar
 const AVATARS_DIR = path.join(__dirname, '../public/uploads/avatars');
 
+// --- 1. Đảm bảo thư mục tồn tại ---
 if (!fs.existsSync(AVATARS_DIR)) {
     // Sử dụng recursive: true để tạo các thư mục con nếu cần
     fs.mkdirSync(AVATARS_DIR, { recursive: true });
@@ -15,12 +16,11 @@ if (!fs.existsSync(AVATARS_DIR)) {
 // --- 2. Cấu hình nơi lưu trữ và tên file (diskStorage) ---
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        // Luôn trả về thư mục lưu trữ đã được kiểm tra
         cb(null, AVATARS_DIR); 
     },
     filename: function (req, file, cb) {
-        // Multer chạy sau isAuth, nên req.user đã tồn tại (nếu xác thực thành công).
         // Dùng .toString() cho _id để đảm bảo nó là chuỗi.
+        // req.user được thiết lập bởi middleware isAuth trước đó.
         const userId = req.user && req.user._id ? req.user._id.toString() : 'guest';
         const uniqueSuffix = Date.now();
         const ext = path.extname(file.originalname);
@@ -43,15 +43,12 @@ const upload = multer({
         if (mimeType && extName) {
             return cb(null, true);
         } else {
-            // Lỗi này sẽ được Multer xử lý và chuyển xuống next(err)
             cb(new Error('Chỉ chấp nhận file ảnh (JPG, JPEG, PNG).'));
         }
     }
 });
 
 // --- 4. Export Middleware ---
-// Multer function đã được cấu hình cho việc upload 1 file (single) với field name là 'avatar'
 const singleAvatarUpload = upload.single('avatar'); 
 
-// Xuất dưới dạng đối tượng (cách bạn đã làm)
 module.exports = { singleAvatarUpload };

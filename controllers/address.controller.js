@@ -102,11 +102,24 @@ const deleteAddress = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+const getAddressCount = async (req, res) => {
+    const userId = req.user._id;
 
+    try {
+        const count = await Address.countDocuments({ user: userId });
+        
+        // ⭐ CẤU TRÚC PHẢN HỒI CHO FRONTEND ⭐
+        res.json({ success: true, count: count });
+    } catch (error) {
+        console.error("ERROR GET_ADDRESS_COUNT:", error.message);
+        res.status(500).json({ success: false, message: "Failed to retrieve address count." });
+    }
+};
 // ⭐️ EXPORT TẤT CẢ CÁC HÀM CÙNG LÚC ⭐️
 module.exports = {
     getAddresses,
     createAddress,
     updateAddress,
     deleteAddress,
+    getAddressCount
 };

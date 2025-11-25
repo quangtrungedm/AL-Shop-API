@@ -10,5 +10,6 @@ router.get('/', isAuth, addressController.getAddresses);
 router.post('/', isAuth, addressController.createAddress);       
 router.put('/:id', isAuth, addressController.updateAddress);     
 router.delete('/:id', isAuth, addressController.deleteAddress);  
+router.get('/count', isAuth, addressController.getAddressCount);
 
 module.exports = router;

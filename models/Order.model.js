@@ -1,3 +1,5 @@
+// File: models/Order.model.js (FIXED)
+
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
@@ -12,7 +14,17 @@ const orderSchema = new mongoose.Schema({
         price: Number
     }],
     total: { type: Number, required: true },
-    shippingAddress: { type: Object, required: false }, // Địa chỉ giao hàng chi tiết
+    
+    // ⭐ FIX 1: Thay đổi từ ObjectId/ref sang Embedded Object ⭐
+    shippingAddress: { 
+        type: {
+            recipientName: { type: String, required: true },
+            fullAddress: { type: String, required: true },
+            phoneNumber: { type: String, required: true }
+        }, 
+        required: true // Bắt buộc phải có đối tượng địa chỉ
+    }, 
+    
     status: { 
         type: String, 
         enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'], 

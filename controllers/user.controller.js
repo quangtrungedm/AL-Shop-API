@@ -1,17 +1,17 @@
-// controllers/user.controller.js
+// [File] controllers/user.controller.js
 
 const User = require('../models/User.model');
 const Product = require('../models/Product.model');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const PasswordReset = require('../models/PasswordReset.model');
+const fs = require('fs');
+const path = require('path');
 
 const { sendEmail } = require('../helpers/send-email'); 
 
-// --- HÀM XÁC THỰC VÀ ĐĂNG NHẬP ---
-
-// Register
-const register = async (req, res) => { // Đã sửa: dùng const
+// --- HÀM XÁC THỰC VÀ ĐĂNG NHẬP (GIỮ NGUYÊN) ---
+const register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
         if (!name || !email || !password) {
@@ -21,8 +21,8 @@ const register = async (req, res) => { // Đã sửa: dùng const
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'Email đã tồn tại.' });
         }
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await User.create({ name, email, password: hashedPassword });
+        
+        const user = await User.create({ name, email, password }); 
         
         res.status(201).json({
             success: true,
@@ -35,20 +35,20 @@ const register = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// Đăng nhập
-const loginUser = async (req, res) => { // Đã sửa: dùng const
+const login = async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email });
+
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Email không tồn tại' });
+            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
         }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ success: false, message: 'Sai mật khẩu' });
+            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
         }
-
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
             expiresIn: '30d',
         });
 
@@ -66,10 +66,8 @@ const loginUser = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// --- HÀM QUÊN MẬT KHẨU ---
-
-// (POST) /api/users/forgot-password
-const forgotPassword = async (req, res) => { // Đã sửa: dùng const
+// ... (forgotPassword, verifyOtp, setNewPassword - GIỮ NGUYÊN) ...
+const forgotPassword = async (req, res) => { 
     const { email } = req.body;
     
     if (!email) {
@@ -79,7 +77,6 @@ const forgotPassword = async (req, res) => { // Đã sửa: dùng const
     try {
         const user = await User.findOne({ email });
 
-
         if (!user) {
             return res.status(200).json({ 
                 success: true, 
@@ -87,12 +84,8 @@ const forgotPassword = async (req, res) => { // Đã sửa: dùng const
             });
         }
 
-
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = Date.now() + 5 * 60000; // 5 phút
-
-
-
         
         await PasswordReset.findOneAndUpdate(
             { email },
@@ -100,13 +93,11 @@ const forgotPassword = async (req, res) => { // Đã sửa: dùng const
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         
-
         const emailContent = `
             <h1>Mã xác nhận Đặt lại mật khẩu AL-Shop</h1>
             <p>Mã OTP của bạn là: <strong>${otp}</strong></p>
             <p>Mã này sẽ hết hạn trong 5 phút. Vui lòng không chia sẻ.</p>
         `;
-
 
         const emailSent = await sendEmail({
             to: email,
@@ -132,8 +123,7 @@ const forgotPassword = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// (POST) /api/users/verify-otp
-const verifyOtp = async (req, res) => { // Đã sửa: dùng const
+const verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
         if (!email || !otp) return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ email và OTP.' });
@@ -141,9 +131,8 @@ const verifyOtp = async (req, res) => { // Đã sửa: dùng const
         const now = Date.now();
         const reset = await PasswordReset.findOne({ email, otp });
         
-    
         if (!reset) {
-            return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ hoặc đã hết hạn.' });
+            return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ.' });
         }
         
         if (reset.expiresAt < now) {
@@ -156,11 +145,9 @@ const verifyOtp = async (req, res) => { // Đã sửa: dùng const
             return res.status(400).json({ success: false, message: 'OTP đã được xác minh trước đó.' });
         }
 
-
         reset.verified = true;
         await reset.save();
         console.log(`DEBUG VERIFY: OTP ${otp} cho ${email} đã được xác minh thành công và lưu vào DB.`);
-
 
         res.json({ success: true, message: 'Xác thực OTP thành công. Bạn có thể đặt lại mật khẩu.' });
     } catch (err) {
@@ -169,50 +156,37 @@ const verifyOtp = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// (POST) /api/users/set-new-password
-const setNewPassword = async (req, res) => { // Đã sửa: dùng const
-
-    console.log("DEBUG SET_PASS: received body:", req.body);
+const setNewPassword = async (req, res) => {
     
     try {
         const { email, newPassword } = req.body; 
         
         if (!email || !newPassword) {
-            console.log("DEBUG SET_PASS: Lỗi 400 - Thiếu email hoặc newPassword.");
             return res.status(400).json({ success: false, message: 'Vui lòng nhập email và mật khẩu mới.' });
         }
 
-
         const reset = await PasswordReset.findOne({ email, verified: true });
-        console.log(`DEBUG SET_PASS: PasswordReset record found (verified: true): ${reset ? 'Có' : 'Không'}`);
         
-
         if (!reset) {
-            console.log("DEBUG SET_PASS: Lỗi 400 - Yêu cầu đặt lại mật khẩu không hợp lệ.");
-            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.' });
+            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu không hợp lệ hoặc chưa được xác minh.' });
         }
-
 
         const now = Date.now();
         if (reset.expiresAt < now) {
-            console.log("DEBUG SET_PASS: Lỗi 400 - Phiên đã hết hạn.");
             await PasswordReset.deleteMany({ email });
             return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.' });
         }
         
-
         const user = await User.findOne({ email });
         if (!user) {
             await PasswordReset.deleteMany({ email });
             return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản để cập nhật.' });
         }
 
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = newPassword;
         await user.save();
         
-
         await PasswordReset.deleteMany({ email });
-        console.log(`DEBUG SET_PASS: Mật khẩu của ${email} đã đổi thành công. Reset record đã xóa.`);
 
         res.json({ success: true, message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' });
     } catch (err) {
@@ -220,90 +194,127 @@ const setNewPassword = async (req, res) => { // Đã sửa: dùng const
         res.status(500).json({ success: false, message: 'Lỗi server khi đổi mật khẩu.' });
     }
 };
+// --- KẾT THÚC HÀM XÁC THỰC ---
 
-// --- CÁC HÀM QUẢN LÝ USER VÀ YÊU THÍCH ---
 
-// Lấy danh sách users
-const getUsers = async (req, res) => { // Đã sửa: dùng const
-    try {
-        const users = await User.find().select('-password');
-        res.json({ success: true, data: users });
-    } catch (error) {
-        console.error("ERROR: getUsers failed:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
+// --- HÀM QUẢN LÝ USER CƠ BẢN (BỔ SUNG) ---
 
-// Lấy thông tin 1 user
-const getUserById = async (req, res) => { // Đã sửa: dùng const
-    try {
-        const user = await User.findById(req.params.id).select('-password');
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy user' });
-        }
-        res.json({ success: true, data: user });
-    } catch (error) {
-        console.error("ERROR: getUserById failed:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// CẬP NHẬT HÀM updateUser
-const updateUser = async (req, res) => { // Đã sửa: dùng const
+// Cập nhật thông tin User (PUT /api/users/:id)
+const updateUser = async (req, res) => {
     try {
         const userId = req.params.id;
-        const { name, email, phone, address, avatar } = req.body;
-
-        if (!name || !email) {
-            return res.status(400).json({ success: false, message: 'Tên và Email không được để trống.' });
+        const requestingUser = req.user;
+        const updateFields = req.body;
+        
+        // 1. Kiểm tra quyền: Chỉ admin hoặc chính chủ tài khoản mới được cập nhật
+        if (requestingUser.role !== 'admin' && requestingUser.id !== userId) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Bạn không có quyền cập nhật thông tin người dùng này.' 
+            });
         }
 
-        const updates = {};
-        if (name) updates.name = name;
-        if (email) updates.email = email;
-        updates.phone = phone !== undefined ? phone : '';
-        updates.address = address !== undefined ? address : '';
-        updates.avatar = avatar !== undefined ? avatar : '';
+        // 2. Không cho phép cập nhật role/password/favorites từ API này
+        delete updateFields.role;
+        delete updateFields.password;
+        delete updateFields.favorites;
 
-        const user = await User.findByIdAndUpdate(
-            userId,
-            { $set: updates },
-            { new: true, runValidators: true }
-        ).select('-password');
 
+        // 3. Xử lý email trùng lặp (chỉ khi email bị thay đổi)
+        if (updateFields.email) {
+            const existingUser = await User.findOne({ email: updateFields.email, _id: { $ne: userId } });
+            if (existingUser) {
+                // Trả về lỗi 400 để client hiển thị dưới input
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `Email này (${updateFields.email}) đã được sử dụng bởi tài khoản khác.` 
+                });
+            }
+        }
+        
+        // 4. Cập nhật User
+        const updatedUser = await User.findByIdAndUpdate(userId, updateFields, { new: true, runValidators: true });
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng.' });
+        }
+        
+        // Trả về user mà không có password
+        const userWithoutPassword = updatedUser.toObject();
+        delete userWithoutPassword.password;
+
+        res.status(200).json({ success: true, message: 'Cập nhật thành công', data: userWithoutPassword });
+
+    } catch (error) {
+        console.error("ERROR: updateUser failed:", error);
+        
+        if (error.name === 'ValidationError') {
+             return res.status(400).json({ success: false, message: error.message });
+        }
+        
+        res.status(500).json({ success: false, message: error.message || 'Lỗi server khi cập nhật người dùng.' });
+    }
+};
+
+
+// Xử lý Upload Avatar (POST /api/upload/avatar)
+const uploadAvatar = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Không tìm thấy file ảnh.' });
+        }
+        
+        const userId = req.user.id; 
+        const user = await User.findById(userId).select('avatar');
+        
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng để cập nhật.' });
+            fs.unlinkSync(req.file.path);
+            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng để cập nhật avatar.' });
         }
+        
+        // 1. Lấy URL mới (Đường dẫn tương đối)
+        const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
+        
+        // 2. Xóa ảnh cũ (tránh xóa ảnh mặc định hoặc ảnh từ URL bên ngoài)
+        const oldAvatar = user.avatar;
+        const isDefaultOrExternal = oldAvatar.startsWith('http') || !oldAvatar;
+        
+        if (!isDefaultOrExternal) {
+            // Xây dựng đường dẫn vật lý đầy đủ của ảnh cũ
+            const oldAvatarFilename = oldAvatar.split('/').pop(); 
+            const oldAvatarPath = path.join(__dirname, `../public/uploads/avatars/${oldAvatarFilename}`);
+            
+            if (fs.existsSync(oldAvatarPath)) {
+                fs.unlinkSync(oldAvatarPath);
+                console.log(`DEBUG UPLOAD: Đã xóa ảnh cũ: ${oldAvatarFilename}`);
+            }
+        }
+        
+        // 3. Cập nhật URL avatar mới vào DB
+        user.avatar = newAvatarPath;
+        await user.save(); 
 
-        res.status(200).json({
-            success: true,
-            message: 'Cập nhật thông tin cá nhân thành công.',
-            data: user
+        res.status(200).json({ 
+            success: true, 
+            message: 'Tải ảnh đại diện thành công', 
+            url: newAvatarPath 
         });
 
     } catch (error) {
-        if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: 'Email này đã được sử dụng bởi người khác.' });
+        console.error("ERROR: uploadAvatar failed:", error);
+        
+        // Nếu lỗi xảy ra sau khi upload (ví dụ: lỗi DB), xóa file đã lưu
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
         }
-        console.error("ERROR: updateUser failed:", error);
-        res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-// Xóa user
-const deleteUser = async (req, res) => { // Đã sửa: dùng const
-    try {
-        await User.findByIdAndDelete(req.params.id);
-        res.json({ success: true, message: 'Đã xóa user' });
-    } catch (error) {
-        console.error("ERROR: deleteUser failed:", error);
-        res.status(500).json({ success: false, message: error.message });
+        
+        res.status(500).json({ success: false, message: error.message || 'Lỗi server khi xử lý file upload.' });
     }
 };
 
 
-// Thêm/Xóa sản phẩm khỏi danh sách yêu thích
-const toggleFavorite = async (req, res) => { // Đã sửa: dùng const
+// --- HÀM QUẢN LÝ YÊU THÍCH (GIỮ NGUYÊN) ---
+const toggleFavorite = async (req, res) => {
     try {
         const userId = req.user?._id; 
         const { productId } = req.body;
@@ -344,8 +355,7 @@ const toggleFavorite = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// Lấy danh sách yêu thích
-const getFavorites = async (req, res) => { // Đã sửa: dùng const
+const getFavorites = async (req, res) => {
     try {
         const userId = req.user?._id; 
 
@@ -367,17 +377,16 @@ const getFavorites = async (req, res) => { // Đã sửa: dùng const
     }
 };
 
-// ⭐️ ĐẢM BẢO TẤT CẢ CÁC HÀM ĐƯỢC XUẤT RA ⭐️
+// ⭐️ EXPORT CÁC HÀM ⭐️
 module.exports = {
     register,
-    loginUser,
+    login, 
     forgotPassword,
     verifyOtp,
     setNewPassword,
     toggleFavorite,
     getFavorites,
-    getUsers,
-    getUserById,
+    // BỔ SUNG
     updateUser,
-    deleteUser,
+    uploadAvatar,
 };

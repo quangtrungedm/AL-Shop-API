@@ -1,6 +1,9 @@
+// middleware/auth.js
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.model'); 
 
+// 1. MIDDLEWARE XÁC THỰC (isAuth)
 const isAuth = async (req, res, next) => {
     console.log("DEBUG AUTH: Auth Header received:", req.headers.authorization);
     
@@ -37,6 +40,7 @@ const isAuth = async (req, res, next) => {
             });
         }
         
+        // Gán thông tin user vào request
         req.user = user;
         
         console.log(`DEBUG AUTH: User ${user._id} authenticated. Proceeding to controller.`);
@@ -62,6 +66,22 @@ const isAuth = async (req, res, next) => {
     }
 };
 
+// 2. MIDDLEWARE KIỂM TRA QUYỀN ADMIN (isAdmin)
+// Middleware này cần được gọi SAU isAuth
+const isAdmin = (req, res, next) => {
+    // req.user phải tồn tại từ isAuth
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        console.warn(`ACCESS DENIED: User ${req.user?._id || 'Unknown'} (Role: ${req.user?.role || 'None'}) tried to access Admin route.`);
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Bạn không có quyền quản trị.' 
+        });
+    }
+};
+
 module.exports = {
     isAuth,
+    isAdmin, // ⭐️ ĐÃ BỔ SUNG ⭐️
 };
