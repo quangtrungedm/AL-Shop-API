@@ -1,4 +1,4 @@
-// File: models/Order.model.js (FIXED)
+// File: models/Order.model.js
 
 const mongoose = require('mongoose');
 
@@ -13,16 +13,17 @@ const orderSchema = new mongoose.Schema({
         quantity: Number,
         price: Number
     }],
-    total: { type: Number, required: true },
+    // 👇 Trường lưu tổng tiền tên là 'total'
+    total: { type: Number, required: true }, 
     
-    // ⭐ FIX 1: Thay đổi từ ObjectId/ref sang Embedded Object ⭐
+    // ⭐ Đã chuyển sang Embedded Object cho địa chỉ
     shippingAddress: { 
         type: {
             recipientName: { type: String, required: true },
             fullAddress: { type: String, required: true },
             phoneNumber: { type: String, required: true }
         }, 
-        required: true // Bắt buộc phải có đối tượng địa chỉ
+        required: true 
     }, 
     
     status: { 

@@ -1,4 +1,4 @@
-// [File] server.js - ĐÃ XÁC NHẬN VÀ GIỮ NGUYÊN THỨ TỰ MIDDLEWARE CHÍNH XÁC
+// [File] server.js
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -32,8 +32,7 @@ console.log("JWT Secret đã tải:", process.env.JWT_SECRET ? '✅ Đã tải' 
 
 app.use(cors());
 
-// ⭐️ QUAN TRỌNG: ĐẶT ROUTE UPLOAD FILE TRƯỚC express.json() 
-// để Multer có thể xử lý multipart/form-data
+// QUAN TRỌNG: ĐẶT ROUTE UPLOAD FILE TRƯỚC express.json() 
 app.use('/api/upload', uploadRoutes); 
 
 // Body Parser cho các route còn lại (JSON data)
@@ -45,19 +44,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 // ----------------------------------------
 // --- CÁC ROUTES CÒN LẠI ---
 // ----------------------------------------
+app.use('/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 app.get('/', (req, res) => {
-    res.json({
-        message: 'AL-Shop API',
-        version: '1.0.0',
-        endpoints: {
-            users: '/api/users',
-            admin: '/api/admin', 
-            products: '/api/products',
-            orders: '/api/orders',
-            upload: '/api/upload' 
-        }
-    });
+    res.json({
+        message: 'AL-Shop API',
+        version: '1.0.0',
+        endpoints: {
+            users: '/api/users',
+            admin: '/api/admin', 
+            products: '/api/products',
+            orders: '/api/orders',
+            upload: '/api/upload' 
+        }
+    });
 });
 
 app.use('/api/users', userRoutes);
@@ -69,39 +69,64 @@ app.use('/api/notifications', notificationRoutes);
 
 
 // ----------------------------------------
-// ⭐️ HÀM KHỞI TẠO ADMIN MẶC ĐỊNH ⭐️
+// ⭐️ HÀM KHỞI TẠO & CẬP NHẬT ADMIN MẶC ĐỊNH ⭐️
 // ----------------------------------------
 const initializeAdmin = async () => {
     const ADMIN_EMAIL = 'phuclv272@gmail.com';
-    const ADMIN_PASSWORD = 'Aa@111111';
+    const ADMIN_PASSWORD = 'Aa@111111'; // Mật khẩu bạn đang dùng trên Client
 
-    const adminExists = await User.findOne({ email: ADMIN_EMAIL });
+    let adminUser = await User.findOne({ email: ADMIN_EMAIL });
 
-    if (adminExists) {
-        if (adminExists.role !== 'admin') {
-            adminExists.role = 'admin';
-            await adminExists.save();
+    if (!adminUser) {
+        // --- TẠO MỚI ---
+        try {
+            // NOTE: Middleware pre('save') sẽ tự hash password này.
+            await User.create({
+                name: 'Phuc LV Admin',
+                email: ADMIN_EMAIL,
+                password: ADMIN_PASSWORD, // Gán plaintext, để middleware model hash.
+                role: 'admin', 
+                phone: '0123456789'
+            });
+
+            console.log(`   ⭐️ ĐÃ TẠO: Tài khoản Admin mặc định (${ADMIN_EMAIL}) đã được tạo thành công.`);
+
+        } catch (error) {
+            console.error('   ❌ LỖI KHỞI TẠO ADMIN:', error.message);
+        }
+    } else {
+        // --- CẬP NHẬT (Dev/Test) ---
+        let needsSave = false;
+        
+        // Kiểm tra Role
+        if (adminUser.role !== 'admin') {
+            adminUser.role = 'admin';
+            needsSave = true;
             console.warn(`   ⚠️ WARNING: Role của ${ADMIN_EMAIL} đã được cập nhật thành "admin".`);
         }
-        console.log(`   ✅ Tài khoản Admin mặc định (${ADMIN_EMAIL}) đã tồn tại.`);
-        return;
-    }
-
-    try {
-        const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10); 
         
-        await User.create({
-            name: 'Phuc LV Admin',
-            email: ADMIN_EMAIL,
-            password: hashedPassword,
-            role: 'admin', 
-            phone: '0123456789'
-        });
+        // Kiểm tra Mật khẩu
+        try {
+            const isPasswordMatch = await bcrypt.compare(ADMIN_PASSWORD, adminUser.password);
+            
+            if (!isPasswordMatch) {
+                // ⭐️ SỬA LỖI HASH KÉP: Gán mật khẩu PLAIN-TEXT 
+                // Middleware pre('save') sẽ hash nó khi save().
+                adminUser.password = ADMIN_PASSWORD; 
+                needsSave = true;
+                console.log(`   ⚠️ WARNING: Mật khẩu Admin đã được CẬP NHẬT lại khớp với mật khẩu mặc định.`);
+            }
+        } catch (compareError) {
+            // Xử lý trường hợp hash cũ bị lỗi
+            console.error('   ❌ LỖI SO SÁNH MẬT KHẨU CŨ, KHỞI TẠO LẠI HASH');
+            adminUser.password = ADMIN_PASSWORD; // Gán plaintext để hash lại
+            needsSave = true;
+        }
 
-        console.log(`   ⭐️ ĐÃ TẠO: Tài khoản Admin mặc định (${ADMIN_EMAIL}) đã được tạo thành công.`);
-
-    } catch (error) {
-        console.error('   ❌ LỖI KHỞI TẠO ADMIN:', error.message);
+        if (needsSave) {
+            await adminUser.save();
+        }
+        console.log(`   ✅ Tài khoản Admin mặc định (${ADMIN_EMAIL}) đã tồn tại và được kiểm tra.`);
     }
 };
 // ----------------------------------------
@@ -110,12 +135,12 @@ const initializeAdmin = async () => {
 // --- KẾT NỐI MONGODB ---
 
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-        console.log('--> ✅ Đã kết nối MongoDB');
-        // GỌI HÀM KHỞI TẠO ADMIN SAU KHI KẾT NỐI DB
-        initializeAdmin(); 
-    })
-    .catch(err => console.log('❌ Lỗi kết nối MongoDB:', err));
+    .then(() => {
+        console.log('--> ✅ Đã kết nối MongoDB');
+        // GỌI HÀM KHỞI TẠO ADMIN SAU KHI KẾT NỐI DB
+        initializeAdmin(); 
+    })
+    .catch(err => console.log('❌ Lỗi kết nối MongoDB:', err));
 
 
 // ----------------------------------------
@@ -123,27 +148,27 @@ mongoose.connect(process.env.MONGODB_URI)
 // ----------------------------------------
 
 app.use((err, req, res, next) => {
-    
-    // Bắt lỗi Multer (ví dụ: File quá lớn, tên trường sai)
-    if (err instanceof multer.MulterError) {
-        console.error('Multer Error:', err.message);
-        return res.status(400).json({ 
-            success: false, 
-            message: `Lỗi tải file: ${err.message}. Kiểm tra kích thước file (max 2MB) hoặc tên trường (phải là 'avatar').` 
-        });
-    }
+    
+    // Bắt lỗi Multer 
+    if (err instanceof multer.MulterError) {
+        console.error('Multer Error:', err.message);
+        return res.status(400).json({ 
+            success: false, 
+            message: `Lỗi tải file: ${err.message}. Kiểm tra kích thước file (max 2MB) hoặc tên trường (phải là 'avatar').` 
+        });
+    }
 
-    // Bắt lỗi từ fileFilter trong middleware/upload.js (định dạng ảnh)
-    if (err.message === 'Chỉ chấp nhận file ảnh (JPG, JPEG, PNG).') {
-        return res.status(400).json({ 
-            success: false, 
-            message: err.message 
-        });
-    }
-    
-    // Xử lý lỗi chung (Lỗi 500)
-    console.error(err.stack);
-    res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi Server nội bộ không xác định.' });
+    // Bắt lỗi từ fileFilter 
+    if (err.message === 'Chỉ chấp nhận file ảnh (JPG, JPEG, PNG).') {
+        return res.status(400).json({ 
+            success: false, 
+            message: err.message 
+        });
+    }
+    
+    // Xử lý lỗi chung (Lỗi 500)
+    console.error(err.stack);
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Lỗi Server nội bộ không xác định.' });
 });
 
 
@@ -152,5 +177,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5001; 
 
 app.listen(PORT, () => {
-    console.log(`\n--> 🚀 Server đang chạy tại http://localhost:${PORT}`);
+    console.log(`\n--> 🚀 Server đang chạy tại http://localhost:${PORT}`);
 });

@@ -260,55 +260,31 @@ const updateUser = async (req, res) => {
 // Xử lý Upload Avatar (POST /api/upload/avatar)
 const uploadAvatar = async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Không tìm thấy file ảnh.' });
-        }
-        
-        const userId = req.user.id; 
-        const user = await User.findById(userId).select('avatar');
-        
-        if (!user) {
-            fs.unlinkSync(req.file.path);
-            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng để cập nhật avatar.' });
-        }
-        
-        // 1. Lấy URL mới (Đường dẫn tương đối)
-        const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
-        
-        // 2. Xóa ảnh cũ (tránh xóa ảnh mặc định hoặc ảnh từ URL bên ngoài)
-        const oldAvatar = user.avatar;
-        const isDefaultOrExternal = oldAvatar.startsWith('http') || !oldAvatar;
-        
-        if (!isDefaultOrExternal) {
-            // Xây dựng đường dẫn vật lý đầy đủ của ảnh cũ
-            const oldAvatarFilename = oldAvatar.split('/').pop(); 
-            const oldAvatarPath = path.join(__dirname, `../public/uploads/avatars/${oldAvatarFilename}`);
-            
-            if (fs.existsSync(oldAvatarPath)) {
-                fs.unlinkSync(oldAvatarPath);
-                console.log(`DEBUG UPLOAD: Đã xóa ảnh cũ: ${oldAvatarFilename}`);
-            }
-        }
-        
-        // 3. Cập nhật URL avatar mới vào DB
-        user.avatar = newAvatarPath;
-        await user.save(); 
+        const file = req.file;
+        if (!file) return res.status(400).json({ success: false, message: 'Chưa chọn ảnh.' });
+
+        // Tạo đường dẫn URL đầy đủ
+        const fileName = file.filename;
+        const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
+        const imagePath = `${basePath}${fileName}`; // Lưu URL đầy đủ vào DB
+
+        const userId = req.user.id;
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { avatar: imagePath },
+            { new: true }
+        );
+
+        if (!user) return res.status(404).json({ success: false, message: 'User không tồn tại.' });
 
         res.status(200).json({ 
             success: true, 
-            message: 'Tải ảnh đại diện thành công', 
-            url: newAvatarPath 
+            message: 'Avatar cập nhật thành công', 
+            url: imagePath 
         });
 
     } catch (error) {
-        console.error("ERROR: uploadAvatar failed:", error);
-        
-        // Nếu lỗi xảy ra sau khi upload (ví dụ: lỗi DB), xóa file đã lưu
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        
-        res.status(500).json({ success: false, message: error.message || 'Lỗi server khi xử lý file upload.' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -376,6 +352,29 @@ const getFavorites = async (req, res) => {
         res.status(500).json({ success: false, message: 'Lỗi server khi tải danh sách yêu thích.' });
     }
 };
+// ⭐️ HÀM MỚI 1: Lấy danh sách tất cả người dùng
+const getUsers = async (req, res) => {
+    try {
+        // Lấy tất cả user, trừ trường password ra (bảo mật)
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        res.status(200).json({ success: true, data: users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ⭐️ HÀM MỚI 2: Xóa người dùng
+const deleteUser = async (req, res) => {
+    try {
+        const user = await User.findByIdAndDelete(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
+        }
+        res.status(200).json({ success: true, message: 'Đã xóa người dùng thành công' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 // ⭐️ EXPORT CÁC HÀM ⭐️
 module.exports = {
@@ -389,4 +388,6 @@ module.exports = {
     // BỔ SUNG
     updateUser,
     uploadAvatar,
+    getUsers,
+    deleteUser
 };

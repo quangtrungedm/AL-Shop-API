@@ -1,7 +1,9 @@
-// File: controllers/order.controller.js (ĐÃ FIX LỖI TÌM KIẾM THEO ID)
+// File: controllers/order.controller.js
 
 const Order = require('../models/Order.model');
 const Product = require('../models/Product.model'); 
+// ✅ FIX LỖI: Import User model để dùng cho hàm đếm thống kê
+const User = require('../models/User.model'); 
 const { createNotification } = require('../helpers/notification-helper'); 
 
 // Hàm tiện ích: Lấy ID người dùng (xử lý cả req.user._id và req.user.id)
@@ -48,8 +50,10 @@ const createOrder = async (req, res) => {
     try {
         req.body.user = getUserId(req); 
         
+        // Tạo đơn hàng mới
         const newOrder = await Order.create(req.body); 
 
+        // Xử lý lấy ảnh sản phẩm đầu tiên để làm thông báo
         let imageUrl = null;
         const firstProductItem = newOrder.products[0];
         
@@ -67,6 +71,7 @@ const createOrder = async (req, res) => {
         
         const orderId = newOrder._id;
         const userId = getUserId(req); 
+        // Lấy giá trị total từ đơn hàng vừa tạo
         const orderTotal = newOrder.total ? newOrder.total.toFixed(2) : '0.00'; 
         
         // Tạo thông báo
@@ -91,13 +96,12 @@ const createOrder = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 4: Lấy thông tin 1 đơn hàng (ĐÃ SỬA: Kiểm tra quyền sở hữu và bắt lỗi ID)
+// ⭐️ Hàm 4: Lấy thông tin 1 đơn hàng
 const getOrderById = async (req, res) => {
     const orderId = req.params.id;
     const userId = getUserId(req);
     console.log(`DEBUG ORDER: Getting order by ID: ${orderId}. Checking user: ${userId}`);
     
-    // Nếu bạn có Admin Middleware riêng, hãy dùng nó để bỏ qua bước kiểm tra userId
     const isUserAdmin = req.user?.role === 'admin'; 
     let filter = { _id: orderId };
     
@@ -113,13 +117,11 @@ const getOrderById = async (req, res) => {
             .populate('shippingAddress'); 
             
         if (!order) {
-            // Trả về 404 nếu không tìm thấy hoặc không có quyền truy cập
             return res.status(404).json({ success: false, message: 'Order not found or access denied.' });
         }
         res.json({ success: true, data: order });
     } catch (error) {
         console.error("ERROR GET_ORDER_BY_ID:", error.message);
-        // 🚨 QUAN TRỌNG: Bắt lỗi CastError nếu ID không hợp lệ
         if (error.name === 'CastError') {
              return res.status(400).json({ success: false, message: "Invalid Order ID format." });
         }
@@ -127,11 +129,10 @@ const getOrderById = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 5: Cập nhật trạng thái đơn hàng (Thường là Admin)
+// ⭐️ Hàm 5: Cập nhật trạng thái đơn hàng (Admin)
 const updateOrder = async (req, res) => {
     console.log(`DEBUG ORDER: Updating order ID: ${req.params.id}`);
     try {
-        // Có thể cần thêm logic kiểm tra quyền Admin tại đây
         const order = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true });
         
         if (!order) {
@@ -145,20 +146,18 @@ const updateOrder = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 6: Đếm số lượng đơn hàng của người dùng ⭐️
+// ⭐️ Hàm 6: Đếm số lượng đơn hàng của người dùng (Cho User App)
 const getOrderCount = async (req, res) => {
     const userId = getUserId(req); 
 
     console.log(`DEBUG COUNT: Attempting to count orders for ID: ${userId}`);
 
     if (!userId) {
-        console.error("ERROR: User ID is missing after authentication.");
         return res.status(401).json({ success: false, message: "Authentication required." });
     }
 
     try {
         const count = await Order.countDocuments({ user: userId });
-        console.log(`DEBUG COUNT: Success! Found ${count} orders for user.`);
         res.json({ success: true, count: count });
     } catch (error) {
         console.error("CRITICAL ERROR in getOrderCount:", error); 
@@ -166,12 +165,129 @@ const getOrderCount = async (req, res) => {
     }
 };
 
+// ⭐️ Hàm 7: Lấy tổng số đơn hàng (Đơn giản)
+const getTotalOrders = async (req, res) => {
+    console.log("DEBUG DASHBOARD: Getting total orders count for Admin.");
+    try {
+        const orderCount = await Order.countDocuments(); 
+        res.status(200).json({ success: true, count: orderCount });
+    } catch (error) {
+        console.error("ERROR GET_TOTAL_ORDERS:", error.message);
+        res.status(500).json({ success: false, message: "Failed to count total orders." });
+    }
+};
+
+// ⭐️ Hàm 8 (FINAL): Lấy thống kê chi tiết cho Dashboard (Orders, Revenue, Users, Products)
+const getDashboardStats = async (req, res) => {
+    console.log("DEBUG DASHBOARD: Fetching all stats...");
+    try {
+        // Sử dụng Promise.all để chạy song song 3 truy vấn
+        const [orderStats, userCount, productCount] = await Promise.all([
+            // 1. Tính tổng đơn hàng và doanh thu
+            Order.aggregate([
+                {
+                    $group: {
+                        _id: null,
+                        totalOrders: { $sum: 1 },
+                        // ✅ QUAN TRỌNG: Dùng "$total" vì trong Model tên trường là total
+                        totalRevenue: { $sum: "$total" } 
+                    }
+                }
+            ]),
+            // 2. Đếm tổng User
+            User.countDocuments(),
+            // 3. Đếm tổng Sản phẩm
+            Product.countDocuments()
+        ]);
+
+        // Xử lý kết quả trả về từ Aggregate
+        const resultOrder = orderStats.length > 0 ? orderStats[0] : { totalOrders: 0, totalRevenue: 0 };
+
+        res.status(200).json({ 
+            success: true, 
+            data: {
+                orders: resultOrder.totalOrders,
+                revenue: resultOrder.totalRevenue,
+                users: userCount,
+                products: productCount
+            }
+        });
+    } catch (error) {
+        console.error("ERROR DASHBOARD STATS:", error);
+        res.status(500).json({ success: false, message: "Failed to get dashboard stats." });
+    }
+};
+// ⭐️ HÀM 9 (FINAL): Thống kê doanh thu cho Biểu đồ
+const getRevenueAnalytics = async (req, res) => {
+    try {
+        const { type } = req.query; // type = 'day', 'week', 'month', 'year'
+        const today = new Date();
+        let startDate = new Date();
+        let groupBy = {};
+        
+        // 1. Xác định khoảng thời gian và cách nhóm dữ liệu
+        switch (type) {
+            case 'day': // Theo giờ trong ngày hôm nay
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $hour: "$createdAt" };
+                break;
+            case 'week': // 7 ngày gần nhất
+                startDate.setDate(today.getDate() - 6);
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { 
+                    $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } 
+                };
+                break;
+            case 'month': // Các ngày trong tháng này
+                startDate.setDate(1); // Ngày mùng 1
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { 
+                    $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } 
+                };
+                break;
+            case 'year': // 12 tháng trong năm nay
+                startDate.setMonth(0, 1); // Tháng 1
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $month: "$createdAt" };
+                break;
+            default: // Mặc định là Year
+                startDate.setMonth(0, 1);
+                groupBy = { $month: "$createdAt" };
+        }
+
+        // 2. Thực hiện Aggregation (Gom nhóm và tính tổng)
+        const stats = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: startDate }, // Chỉ lấy đơn từ ngày bắt đầu
+                    // status: { $ne: 'cancelled' } // (Tùy chọn) Bỏ qua đơn hủy nếu muốn
+                }
+            },
+            {
+                $group: {
+                    _id: groupBy, // Nhóm theo Ngày hoặc Tháng hoặc Giờ
+                    totalSales: { $sum: "$total" } // Cộng dồn tiền (Check kỹ DB là 'total' hay 'totalPrice')
+                }
+            },
+            { $sort: { _id: 1 } } // Sắp xếp tăng dần theo thời gian
+        ]);
+
+        res.status(200).json({ success: true, data: stats });
+
+    } catch (error) {
+        console.error("Lỗi Chart API:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 // ⭐️ Xuất tất cả các hàm ⭐️
 module.exports = {
-    getOrders,          
-    getOrdersByUser,    
+    getOrders,          
+    getOrdersByUser,    
     createOrder,
     getOrderById,
     updateOrder,
-    getOrderCount
+    getOrderCount,
+    getTotalOrders,
+    getRevenueAnalytics,
+    getDashboardStats
 };
