@@ -1,5 +1,3 @@
-Dưới đây là toàn bộ nội dung file `README.md` trong một khối duy nhất để bạn copy cho tiện nhé:
-
 ````markdown
 # AL-Shop Project
 
