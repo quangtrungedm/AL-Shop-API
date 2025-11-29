@@ -4,7 +4,7 @@ const Notification = require('../models/Notification.model');
  * Tạo và lưu một bản ghi thông báo mới vào cơ sở dữ liệu.
  * @param {string} userId - ID của người dùng nhận thông báo.
  * @param {string} title - Tiêu đề thông báo.
- * @param {string} description - Mô tả chi tiết.
+ * @param {string} description - Mô tả chi tiết. 
  * @param {string} type - Loại thông báo (ORDER_STATUS, NEW_PRODUCT, etc.).
  * @param {string} [image] - URL hình ảnh (tùy chọn).
  * @param {mongoose.Types.ObjectId} [referenceId] - ID của đối tượng liên quan (tùy chọn).
