@@ -6,7 +6,7 @@ const fs = require('fs');
 
 // Đường dẫn tuyệt đối đến thư mục lưu trữ avatar
 const AVATARS_DIR = path.join(__dirname, '../public/uploads/avatars');
-
+ 
 // --- 1. Đảm bảo thư mục tồn tại ---
 if (!fs.existsSync(AVATARS_DIR)) {
     // Sử dụng recursive: true để tạo các thư mục con nếu cần
