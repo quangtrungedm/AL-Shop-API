@@ -1,111 +1,106 @@
 // File: hooks/useProfileData.js 
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import client from '../api/client'; 
 import { useAuth } from '../context/AuthContext';
 
 const useProfileData = () => {
     const { user, token } = useAuth();
     
-    // States cho Dữ liệu
+    // Data States
     const [orderCount, setOrderCount] = useState(0);
     const [addressCount, setAddressCount] = useState(0);
     const [cardCount, setCardCount] = useState(0); 
 
-    // States cho Trạng thái tải
-    const [isCounting, setIsCounting] = useState(true);
+    // Loading State
+    const [isLoading, setIsLoading] = useState(true);
 
-    // --- CÁC HÀM FETCH API (ĐÃ THÊM LOG BẮT LỖI CHI TIẾT) ---
+    // --- API FETCHING FUNCTIONS ---
 
-    // Hàm chung để lấy headers
+    // Helper: Get Authorization headers
     const getAuthHeaders = () => ({
         headers: { Authorization: `Bearer ${token}` }
     });
 
-    // 1. Fetch số lượng Đơn hàng (GET /orders/count)
-    const fetchOrderCountAPI = async () => {
-        if (!token) {
-            console.warn("[DEBUG HOOK] ⚠️ Không có token, bỏ qua fetch /orders/count.");
-            return 0;
-        }
+    // 1. Fetch Order Count (GET /orders/count)
+    const fetchOrderCount = async () => {
+        if (!token) return 0;
         try {
-            console.log("-> Đang fetch /orders/count...");
             const response = await client.get('/orders/count', getAuthHeaders());
             const count = response.data?.count || 0;
-            console.log(`✅ [DEBUG HOOK] /orders/count: Thành công, Count = ${count}`);
+            console.log(`[ProfileHook] Orders: ${count}`);
             return count;
-        } catch (e) { 
-            // Bắt lỗi chi tiết từ Axios
-            const errorMsg = e.response?.data?.message || e.message || "Lỗi không xác định";
-            console.error(`❌ [DEBUG HOOK] Lỗi API /orders/count (Status: ${e.response?.status || 'N/A'}):`, errorMsg);
-            return 0; 
+        } catch (error) { 
+            const msg = error.response?.data?.message || error.message;
+            console.warn(`[ProfileHook] Fetch Orders Failed: ${msg}`);
+            return 0; // Return 0 on error to prevent crash
         }
     };
 
-    // 2. Fetch số lượng Địa chỉ (GET /addresses/count)
-    const fetchAddressCountAPI = async () => {
-        if (!token) {
-            console.warn("[DEBUG HOOK] ⚠️ Không có token, bỏ qua fetch /addresses/count.");
-            return 0;
-        }
+    // 2. Fetch Address Count (GET /addresses/count)
+    const fetchAddressCount = async () => {
+        if (!token) return 0;
         try {
-            console.log("-> Đang fetch /addresses/count...");
             const response = await client.get('/addresses/count', getAuthHeaders());
             const count = response.data?.count || 0;
-            console.log(`✅ [DEBUG HOOK] /addresses/count: Thành công, Count = ${count}`);
+            console.log(`[ProfileHook] Addresses: ${count}`);
             return count;
-        } catch (e) { 
-            const errorMsg = e.response?.data?.message || e.message || "Lỗi không xác định";
-            console.error(`❌ [DEBUG HOOK] Lỗi API /addresses/count (Status: ${e.response?.status || 'N/A'}):`, errorMsg);
+        } catch (error) { 
+            const msg = error.response?.data?.message || error.message;
+            console.warn(`[ProfileHook] Fetch Addresses Failed: ${msg}`);
             return 0; 
         }
     };
     
-    // 3. Fetch số lượng Thẻ/Payment Methods (Mockup)
-    const fetchCardCountAPI = async () => {
-        // Giả lập độ trễ và trả về giá trị cố định
+    // 3. Fetch Card/Payment Methods Count (Mockup)
+    const fetchCardCount = async () => {
+        // Simulate network latency
         await new Promise(resolve => setTimeout(resolve, 500)); 
-        return 2;
+        return 2; // Hardcoded value for demo
     };
 
-    // --- EFFECT CHÍNH ---
+    // --- MAIN EFFECT ---
 
     useEffect(() => {
+        let isMounted = true; // Cleanup flag to prevent state updates on unmount
+
         if (!user || !token) {
-            console.log("[DEBUG HOOK] 🚫 User hoặc Token không tồn tại. Bỏ qua Load Counts.");
-            setIsCounting(false);
+            console.log("[ProfileHook] No user/token found. Skipping fetch.");
+            setIsLoading(false);
             return;
         }
         
-        console.log("[DEBUG HOOK] 🔄 Bắt đầu tải các Counts cho Profile...");
-
         const loadAllCounts = async () => {
-            setIsCounting(true);
+            console.log("[ProfileHook] Starting data fetch...");
+            setIsLoading(true);
             
-            // Chạy tất cả các promises song song
-            const results = await Promise.all([
-                fetchOrderCountAPI(),
-                fetchAddressCountAPI(),
-                fetchCardCountAPI(),
+            // Execute all promises in parallel
+            const [orders, addresses, cards] = await Promise.all([
+                fetchOrderCount(),
+                fetchAddressCount(),
+                fetchCardCount(),
             ]);
 
-            // Cập nhật trạng thái
-            setOrderCount(results[0]);
-            setAddressCount(results[1]);
-            setCardCount(results[2]);
-            
-            console.log("[DEBUG HOOK] ✅ Tải Counts Hoàn tất.");
-            setIsCounting(false);
+            if (isMounted) {
+                setOrderCount(orders);
+                setAddressCount(addresses);
+                setCardCount(cards);
+                setIsLoading(false);
+                console.log("[ProfileHook] All data loaded successfully.");
+            }
         };
 
         loadAllCounts();
+
+        // Cleanup function
+        return () => { isMounted = false; };
     }, [user, token]);
 
     return {
         orderCount,
         addressCount,
         cardCount,
-        isCounting,
+        isLoading,
     };
 };
 
