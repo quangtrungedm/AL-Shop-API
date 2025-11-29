@@ -2,16 +2,16 @@
 
 const Order = require('../models/Order.model');
 const Product = require('../models/Product.model'); 
-// ✅ FIX LỖI: Import User model để dùng cho hàm đếm thống kê
+// ✅ FIX: Import User model for dashboard statistics
 const User = require('../models/User.model'); 
 const { createNotification } = require('../helpers/notification-helper'); 
 
-// Hàm tiện ích: Lấy ID người dùng (xử lý cả req.user._id và req.user.id)
+// Helper: Extract User ID from request (handles both req.user._id and req.user.id)
 const getUserId = (req) => req.user?._id || req.user?.id;
 
-// --- ĐỊNH NGHĨA CÁC HÀM CONTROLLER ---
+// --- CONTROLLER FUNCTIONS ---
 
-// ⭐️ Hàm 1: Lấy danh sách TẤT CẢ đơn hàng (Admin)
+// ⭐️ Function 1: Retrieve ALL orders (Admin)
 const getOrders = async (req, res) => {
     console.log("DEBUG ORDER: Getting all orders (Admin).");
     try {
@@ -26,7 +26,7 @@ const getOrders = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 2: Lấy danh sách đơn hàng CỦA MỘT NGƯỜI DÙNG (Frontend)
+// ⭐️ Function 2: Retrieve orders for a specific User (Frontend)
 const getOrdersByUser = async (req, res) => {
     const userId = getUserId(req); 
     console.log(`DEBUG ORDER: Getting orders for User ID: ${userId}`);
@@ -44,22 +44,22 @@ const getOrdersByUser = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 3: Tạo đơn hàng mới
+// ⭐️ Function 3: Create a new order
 const createOrder = async (req, res) => {
     console.log("DEBUG ORDER: Received new order request.");
     try {
         req.body.user = getUserId(req); 
         
-        // Tạo đơn hàng mới
+        // Create new order
         const newOrder = await Order.create(req.body); 
 
-        // Xử lý lấy ảnh sản phẩm đầu tiên để làm thông báo
+        // Logic: Fetch the first product image for the notification
         let imageUrl = null;
         const firstProductItem = newOrder.products[0];
         
         if (firstProductItem && firstProductItem.product) {
             try {
-                // Sử dụng .lean() để tối ưu truy vấn
+                // Use .lean() for query optimization
                 const productDetail = await Product.findById(firstProductItem.product).select('image').lean();
                 if (productDetail && productDetail.image && productDetail.image.length > 0) {
                     imageUrl = productDetail.image[0]; 
@@ -71,10 +71,10 @@ const createOrder = async (req, res) => {
         
         const orderId = newOrder._id;
         const userId = getUserId(req); 
-        // Lấy giá trị total từ đơn hàng vừa tạo
+        // Format total value from the created order
         const orderTotal = newOrder.total ? newOrder.total.toFixed(2) : '0.00'; 
         
-        // Tạo thông báo
+        // Trigger notification
         await createNotification({
             userId: userId,
             title: `Order #${orderId.toString().slice(-6)} has been confirmed!`,
@@ -96,7 +96,7 @@ const createOrder = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 4: Lấy thông tin 1 đơn hàng
+// ⭐️ Function 4: Retrieve order details by ID
 const getOrderById = async (req, res) => {
     const orderId = req.params.id;
     const userId = getUserId(req);
@@ -105,7 +105,7 @@ const getOrderById = async (req, res) => {
     const isUserAdmin = req.user?.role === 'admin'; 
     let filter = { _id: orderId };
     
-    // Nếu không phải admin, thêm điều kiện lọc theo user ID
+    // If not admin, restrict query to the specific user owner
     if (!isUserAdmin) {
         filter.user = userId; 
     }
@@ -129,7 +129,7 @@ const getOrderById = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 5: Cập nhật trạng thái đơn hàng (Admin)
+// ⭐️ Function 5: Update order status (Admin)
 const updateOrder = async (req, res) => {
     console.log(`DEBUG ORDER: Updating order ID: ${req.params.id}`);
     try {
@@ -146,7 +146,7 @@ const updateOrder = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 6: Đếm số lượng đơn hàng của người dùng (Cho User App)
+// ⭐️ Function 6: Count orders for the current user (User App)
 const getOrderCount = async (req, res) => {
     const userId = getUserId(req); 
 
@@ -165,7 +165,7 @@ const getOrderCount = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 7: Lấy tổng số đơn hàng (Đơn giản)
+// ⭐️ Function 7: Get total order count (Simple - Admin)
 const getTotalOrders = async (req, res) => {
     console.log("DEBUG DASHBOARD: Getting total orders count for Admin.");
     try {
@@ -177,30 +177,30 @@ const getTotalOrders = async (req, res) => {
     }
 };
 
-// ⭐️ Hàm 8 (FINAL): Lấy thống kê chi tiết cho Dashboard (Orders, Revenue, Users, Products)
+// ⭐️ Function 8 (FINAL): Retrieve Dashboard Stats (Orders, Revenue, Users, Products)
 const getDashboardStats = async (req, res) => {
     console.log("DEBUG DASHBOARD: Fetching all stats...");
     try {
-        // Sử dụng Promise.all để chạy song song 3 truy vấn
+        // Use Promise.all for parallel execution
         const [orderStats, userCount, productCount] = await Promise.all([
-            // 1. Tính tổng đơn hàng và doanh thu
+            // 1. Calculate Total Orders and Revenue
             Order.aggregate([
                 {
                     $group: {
                         _id: null,
                         totalOrders: { $sum: 1 },
-                        // ✅ QUAN TRỌNG: Dùng "$total" vì trong Model tên trường là total
+                        // ✅ IMPORTANT: Use "$total" matching the Model schema
                         totalRevenue: { $sum: "$total" } 
                     }
                 }
             ]),
-            // 2. Đếm tổng User
+            // 2. Count Total Users
             User.countDocuments(),
-            // 3. Đếm tổng Sản phẩm
+            // 3. Count Total Products
             Product.countDocuments()
         ]);
 
-        // Xử lý kết quả trả về từ Aggregate
+        // Process aggregation results
         const resultOrder = orderStats.length > 0 ? orderStats[0] : { totalOrders: 0, totalRevenue: 0 };
 
         res.status(200).json({ 
@@ -217,7 +217,8 @@ const getDashboardStats = async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to get dashboard stats." });
     }
 };
-// ⭐️ HÀM 9 (FINAL): Thống kê doanh thu cho Biểu đồ
+
+// ⭐️ Function 9 (FINAL): Revenue Analytics for Charts
 const getRevenueAnalytics = async (req, res) => {
     try {
         const { type } = req.query; // type = 'day', 'week', 'month', 'year'
@@ -225,64 +226,65 @@ const getRevenueAnalytics = async (req, res) => {
         let startDate = new Date();
         let groupBy = {};
         
-        // 1. Xác định khoảng thời gian và cách nhóm dữ liệu
+        // 1. Determine time range and grouping strategy
         switch (type) {
-            case 'day': // Theo giờ trong ngày hôm nay
+            case 'day': // Group by hour for today
                 startDate.setHours(0, 0, 0, 0);
                 groupBy = { $hour: "$createdAt" };
                 break;
-            case 'week': // 7 ngày gần nhất
+            case 'week': // Last 7 days
                 startDate.setDate(today.getDate() - 6);
                 startDate.setHours(0, 0, 0, 0);
                 groupBy = { 
                     $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } 
                 };
                 break;
-            case 'month': // Các ngày trong tháng này
-                startDate.setDate(1); // Ngày mùng 1
+            case 'month': // All days in current month
+                startDate.setDate(1); // 1st day of month
                 startDate.setHours(0, 0, 0, 0);
                 groupBy = { 
                     $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } 
                 };
                 break;
-            case 'year': // 12 tháng trong năm nay
-                startDate.setMonth(0, 1); // Tháng 1
+            case 'year': // 12 months in current year
+                startDate.setMonth(0, 1); // January 1st
                 startDate.setHours(0, 0, 0, 0);
                 groupBy = { $month: "$createdAt" };
                 break;
-            default: // Mặc định là Year
+            default: // Default to Year
                 startDate.setMonth(0, 1);
                 groupBy = { $month: "$createdAt" };
         }
 
-        // 2. Thực hiện Aggregation (Gom nhóm và tính tổng)
+        // 2. Execute Aggregation (Group and Sum)
         const stats = await Order.aggregate([
             {
                 $match: {
-                    createdAt: { $gte: startDate }, // Chỉ lấy đơn từ ngày bắt đầu
-                    // status: { $ne: 'cancelled' } // (Tùy chọn) Bỏ qua đơn hủy nếu muốn
+                    createdAt: { $gte: startDate }, // Filter from start date
+                    // status: { $ne: 'cancelled' } // (Optional) Exclude cancelled orders
                 }
             },
             {
                 $group: {
-                    _id: groupBy, // Nhóm theo Ngày hoặc Tháng hoặc Giờ
-                    totalSales: { $sum: "$total" } // Cộng dồn tiền (Check kỹ DB là 'total' hay 'totalPrice')
+                    _id: groupBy, // Group by Day/Month/Hour
+                    totalSales: { $sum: "$total" } // Sum revenue (Ensure DB field is 'total')
                 }
             },
-            { $sort: { _id: 1 } } // Sắp xếp tăng dần theo thời gian
+            { $sort: { _id: 1 } } // Sort ascending by time
         ]);
 
         res.status(200).json({ success: true, data: stats });
 
     } catch (error) {
-        console.error("Lỗi Chart API:", error);
+        console.error("Chart API Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
-// ⭐️ Xuất tất cả các hàm ⭐️
+
+// ⭐️ Export all functions ⭐️
 module.exports = {
-    getOrders,          
-    getOrdersByUser,    
+    getOrders,           
+    getOrdersByUser,     
     createOrder,
     getOrderById,
     updateOrder,
