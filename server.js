@@ -45,7 +45,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 // --- CÁC ROUTES CÒN LẠI ---
 // ----------------------------------------
 app.use('/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
-
 app.get('/', (req, res) => {
     res.json({
         message: 'AL-Shop API',
