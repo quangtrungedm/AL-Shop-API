@@ -19,7 +19,7 @@ const orderRoutes = require('./routes/order.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const addressRoutes = require('./routes/address.routes');
 const notificationRoutes = require('./routes/notification.routes');
-
+const reviewRoutes = require('./routes/review.routes');
 // --- KHỞI TẠO APP EXPRESS ---
 const app = express(); 
 
@@ -65,7 +65,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/notifications', notificationRoutes);
-
+app.use('/api/reviews', reviewRoutes);
 
 // ----------------------------------------
 // ⭐️ HÀM KHỞI TẠO & CẬP NHẬT ADMIN MẶC ĐỊNH ⭐️
