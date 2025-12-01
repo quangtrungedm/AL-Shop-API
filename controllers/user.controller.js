@@ -162,25 +162,37 @@ const setNewPassword = async (req, res) => {
         const { email, newPassword } = req.body; 
         
         if (!email || !newPassword) {
-            return res.status(400).json({ success: false, message: 'Vui lòng nhập email và mật khẩu mới.' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Please provide both email and new password.' 
+            });
         }
 
         const reset = await PasswordReset.findOne({ email, verified: true });
         
         if (!reset) {
-            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu không hợp lệ hoặc chưa được xác minh.' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid or unverified password reset session.' 
+            });
         }
 
         const now = Date.now();
         if (reset.expiresAt < now) {
             await PasswordReset.deleteMany({ email });
-            return res.status(400).json({ success: false, message: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Password reset session has expired. Please request again.' 
+            });
         }
         
         const user = await User.findOne({ email });
         if (!user) {
             await PasswordReset.deleteMany({ email });
-            return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản để cập nhật.' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User account not found.' 
+            });
         }
 
         user.password = newPassword;
@@ -188,10 +200,17 @@ const setNewPassword = async (req, res) => {
         
         await PasswordReset.deleteMany({ email });
 
-        res.json({ success: true, message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' });
+        res.json({ 
+            success: true, 
+            message: 'Password changed successfully. Please login again.' 
+        });
+
     } catch (err) {
         console.error("ERROR: setNewPassword failed:", err);
-        res.status(500).json({ success: false, message: 'Lỗi server khi đổi mật khẩu.' });
+        res.status(500).json({ 
+            success: false, 
+            message: 'Internal server error while updating password.' 
+        });
     }
 };
 // --- KẾT THÚC HÀM XÁC THỰC ---
@@ -261,18 +280,21 @@ const updateUser = async (req, res) => {
 const uploadAvatar = async (req, res) => {
     try {
         const file = req.file;
-        if (!file) return res.status(400).json({ success: false, message: 'Chưa chọn ảnh.' });
+        if (!file) return res.status(400).json({ success: false, message: 'Chưa chọn ảnh hoặc ảnh không hợp lệ.' });
 
-        // Tạo đường dẫn URL đầy đủ
-        const fileName = file.filename;
-        const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
-        const imagePath = `${basePath}${fileName}`; // Lưu URL đầy đủ vào DB
+        // Tạo đường dẫn URL để frontend truy cập
+        // Lưu ý: Đường dẫn này phải khớp với cấu hình static folder trong server.js
+        const basePath = `${req.protocol}://${req.get('host')}/public/uploads/avatars/`;
+        const fullUrl = `${basePath}${file.filename}`;
 
-        const userId = req.user.id;
+        // Lưu đường dẫn ảnh vào Database (chỉ lưu phần đuôi hoặc full URL tùy logic team bạn)
+        // Ở đây mình lưu Full URL cho dễ hiển thị
+        const userId = req.user._id; 
+        
         const user = await User.findByIdAndUpdate(
             userId,
-            { avatar: imagePath },
-            { new: true }
+            { avatar: fullUrl },
+            { new: true } // Trả về data mới sau khi update
         );
 
         if (!user) return res.status(404).json({ success: false, message: 'User không tồn tại.' });
@@ -280,10 +302,11 @@ const uploadAvatar = async (req, res) => {
         res.status(200).json({ 
             success: true, 
             message: 'Avatar cập nhật thành công', 
-            url: imagePath 
+            url: fullUrl 
         });
 
     } catch (error) {
+        console.error("Upload Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
