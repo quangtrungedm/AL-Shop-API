@@ -3,7 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
-// Bản đồ định dạng file cho phép
+// Map of allowed file MIME types
 const FILE_TYPE_MAP = {
     'image/png': 'png',
     'image/jpeg': 'jpeg',
@@ -13,16 +13,18 @@ const FILE_TYPE_MAP = {
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const isValid = FILE_TYPE_MAP[file.mimetype];
+        
+        // Define error for invalid file types
         let uploadError = new Error('Sai định dạng ảnh (chỉ chấp nhận .png, .jpeg, .jpg)');
 
         if (isValid) {
             uploadError = null;
         }
         
-        // ⭐️ Đường dẫn lưu ảnh: Thư mục gốc/public/uploads
+        // ⭐️ Upload path: Root directory/public/uploads
         const uploadPath = path.join(__dirname, '../public/uploads');
         
-        // Tạo thư mục nếu chưa tồn tại
+        // Create the directory if it does not exist
         if (!fs.existsSync(uploadPath)){
             fs.mkdirSync(uploadPath, { recursive: true });
         }
@@ -30,7 +32,7 @@ const storage = multer.diskStorage({
         cb(uploadError, uploadPath); 
     },
     filename: function (req, file, cb) {
-        // Tạo tên file duy nhất: tên-gốc-thời-gian.đuôi
+        // Generate unique filename: original-name-timestamp.extension
         const fileName = file.originalname.split(' ').join('-');
         const extension = FILE_TYPE_MAP[file.mimetype];
         cb(null, `${fileName}-${Date.now()}.${extension}`);
