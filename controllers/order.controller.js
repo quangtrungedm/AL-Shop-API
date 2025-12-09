@@ -248,6 +248,56 @@ const getRevenueAnalytics = async (req, res) => {
     }
 };
 
+// 10. Thống kê số lượng đơn hàng theo thời gian (Admin)
+const getOrderAnalytics = async (req, res) => {
+    try {
+        const { type } = req.query;
+        const today = new Date();
+        let startDate = new Date();
+        let groupBy = {};
+
+        switch (type) {
+            case 'day':
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $hour: "$createdAt" };
+                break;
+            case 'week':
+                startDate.setDate(today.getDate() - 6);
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+                break;
+            case 'month':
+                startDate.setDate(1);
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+                break;
+            case 'year':
+                startDate.setMonth(0, 1);
+                startDate.setHours(0, 0, 0, 0);
+                groupBy = { $month: "$createdAt" };
+                break;
+            default:
+                startDate.setMonth(0, 1);
+                groupBy = { $month: "$createdAt" };
+        }
+
+        const stats = await Order.aggregate([
+            { $match: { createdAt: { $gte: startDate } } },
+            {
+                $group: {
+                    _id: groupBy,
+                    totalOrders: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 
 module.exports = {
     getOrders,          
@@ -258,5 +308,6 @@ module.exports = {
     getOrderCount,
     getTotalOrders,
     getRevenueAnalytics,
-    getDashboardStats
+    getDashboardStats,
+    getOrderAnalytics
 };

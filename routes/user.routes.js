@@ -15,6 +15,9 @@ router.post('/set-new-password', userController.setNewPassword);
 
 // --- CÁC ROUTE USER/PROFILE ---
 
+// Thống kê User cho Dashboard (Admin)
+router.get('/get/analytics', userController.getUserAnalytics);
+
 // 1. Upload Avatar: CHỈ SỬ DỤNG singleAvatarUpload (đã bao gồm Multer và logic bắt lỗi)
 router.post(
     '/upload-avatar', 

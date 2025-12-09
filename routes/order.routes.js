@@ -13,6 +13,7 @@ const { isAuth } = require('../middleware/auth');
 router.get('/get/count-all', orderController.getTotalOrders);
 router.get('/get/dashboard-stats', orderController.getDashboardStats);
 router.get('/get/analytics', orderController.getRevenueAnalytics);
+router.get('/get/order-analytics', orderController.getOrderAnalytics); // Đếm số đơn theo thời gian
 
 // 2. Route Đếm (User App)
 router.get('/count', isAuth, orderController.getOrderCount);
