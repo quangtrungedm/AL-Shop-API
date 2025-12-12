@@ -1,11 +1,13 @@
 const User = require('../models/User.model');
 const Product = require('../models/Product.model');
-const bcrypt = require('bcryptjs'); // Lưu ý: dùng bcryptjs nếu bạn cài package này, hoặc bcrypt
-const jwt = require('jsonwebtoken');
 const PasswordReset = require('../models/PasswordReset.model');
+const Address = require('../models/Address.model');
+const bcrypt = require('bcryptjs'); 
+const jwt = require('jsonwebtoken');
 const { sendEmail } = require('../helpers/send-email'); 
 
-// --- HÀM XÁC THỰC VÀ ĐĂNG NHẬP ---
+// --- 1. XÁC THỰC (AUTH) ---
+
 const register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -17,14 +19,13 @@ const register = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email đã tồn tại.' });
         }
         
-        // Hash password trước khi lưu
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const user = await User.create({ 
             name, 
             email, 
-            password: hashedPassword // Lưu password đã mã hóa
+            password: hashedPassword 
         }); 
         
         res.status(201).json({
@@ -69,21 +70,16 @@ const login = async (req, res) => {
     }
 };
 
+// --- 2. QUÊN MẬT KHẨU & OTP ---
+
 const forgotPassword = async (req, res) => { 
     const { email } = req.body;
-    
-    if (!email) {
-        return res.status(400).json({ success: false, message: 'Vui lòng nhập email.' });
-    }
+    if (!email) return res.status(400).json({ success: false, message: 'Vui lòng nhập email.' });
 
     try {
         const user = await User.findOne({ email });
-
         if (!user) {
-            return res.status(200).json({ 
-                success: true, 
-                message: 'Nếu email tồn tại, OTP đã được gửi đi.' 
-            });
+            return res.status(200).json({ success: true, message: 'Nếu email tồn tại, OTP đã được gửi đi.' });
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -98,7 +94,7 @@ const forgotPassword = async (req, res) => {
         const emailContent = `
             <h1>Mã xác nhận Đặt lại mật khẩu AL-Shop</h1>
             <p>Mã OTP của bạn là: <strong>${otp}</strong></p>
-            <p>Mã này sẽ hết hạn trong 5 phút. Vui lòng không chia sẻ.</p>
+            <p>Mã này sẽ hết hạn trong 5 phút.</p>
         `;
 
         const emailSent = await sendEmail({
@@ -108,91 +104,65 @@ const forgotPassword = async (req, res) => {
         }); 
 
         if (emailSent) {
-            return res.status(200).json({ 
-                success: true, 
-                message: 'Mã OTP đã được gửi đến email của bạn.' 
-            });
+            return res.status(200).json({ success: true, message: 'Mã OTP đã được gửi đến email của bạn.' });
         } else {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Lỗi dịch vụ gửi mail. Vui lòng thử lại sau.' 
-            });
+            return res.status(500).json({ success: false, message: 'Lỗi dịch vụ gửi mail.' });
         }
     } catch (err) {
-        console.error("ERROR: forgotPassword failed:", err);
-        res.status(500).json({ success: false, message: 'Có lỗi server khi gửi OTP.' });
+        res.status(500).json({ success: false, message: 'Lỗi server khi gửi OTP.' });
     }
 };
 
 const verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
-        if (!email || !otp) return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ email và OTP.' });
+        if (!email || !otp) return res.status(400).json({ success: false, message: 'Thiếu thông tin.' });
 
         const now = Date.now();
         const reset = await PasswordReset.findOne({ email, otp });
         
-        if (!reset) {
-            return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ.' });
-        }
-        
-        if (reset.expiresAt < now) {
-            await PasswordReset.deleteMany({ email });
-            return res.status(400).json({ success: false, message: 'OTP đã hết hạn. Vui lòng yêu cầu OTP mới.' });
-        }
-        
-        if (reset.verified) {
-            return res.status(400).json({ success: false, message: 'OTP đã được xác minh trước đó.' });
-        }
+        if (!reset) return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ.' });
+        if (reset.expiresAt < now) return res.status(400).json({ success: false, message: 'OTP đã hết hạn.' });
+        if (reset.verified) return res.status(400).json({ success: false, message: 'OTP đã được xác minh.' });
 
         reset.verified = true;
         await reset.save();
 
-        res.json({ success: true, message: 'Xác thực OTP thành công. Bạn có thể đặt lại mật khẩu.' });
+        res.json({ success: true, message: 'Xác thực OTP thành công.' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Lỗi server khi xác thực OTP.' });
+        res.status(500).json({ success: false, message: 'Lỗi server.' });
     }
 };
 
 const setNewPassword = async (req, res) => {
     try {
         const { email, newPassword } = req.body; 
-        
-        if (!email || !newPassword) {
-            return res.status(400).json({ success: false, message: 'Please provide both email and new password.' });
-        }
+        if (!email || !newPassword) return res.status(400).json({ success: false, message: 'Thiếu thông tin.' });
 
         const reset = await PasswordReset.findOne({ email, verified: true });
-        
-        if (!reset) {
-            return res.status(400).json({ success: false, message: 'Invalid or unverified password reset session.' });
-        }
+        if (!reset) return res.status(400).json({ success: false, message: 'Yêu cầu không hợp lệ.' });
 
-        const now = Date.now();
-        if (reset.expiresAt < now) {
+        if (reset.expiresAt < Date.now()) {
             await PasswordReset.deleteMany({ email });
-            return res.status(400).json({ success: false, message: 'Session expired.' });
+            return res.status(400).json({ success: false, message: 'Phiên hết hạn.' });
         }
         
         const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User account not found.' });
-        }
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
         const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt); // Hash password mới
+        user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
         
         await PasswordReset.deleteMany({ email });
 
-        res.json({ success: true, message: 'Password changed successfully.' });
-
+        res.json({ success: true, message: 'Đổi mật khẩu thành công.' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Internal server error while updating password.' });
+        res.status(500).json({ success: false, message: 'Lỗi server.' });
     }
 };
 
-// --- HÀM QUẢN LÝ USER ---
+// --- 3. QUẢN LÝ USER & UPLOAD ---
 
 const getUsers = async (req, res) => {
     try {
@@ -203,162 +173,129 @@ const getUsers = async (req, res) => {
     }
 };
 
-const getUserAnalytics = async (req, res) => {
-    try {
-        const { type } = req.query;
-        const today = new Date();
-        let startDate = new Date();
-        let groupBy = {};
-
-        switch (type) {
-            case 'day':
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $hour: "$createdAt" };
-                break;
-            case 'week':
-                startDate.setDate(today.getDate() - 6);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'month':
-                startDate.setDate(1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'year':
-            default:
-                startDate.setMonth(0, 1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $month: "$createdAt" };
-        }
-
-        const stats = await User.aggregate([
-            { $match: { createdAt: { $gte: startDate } } },
-            { $group: { _id: groupBy, totalUsers: { $sum: 1 } } },
-            { $sort: { _id: 1 } }
-        ]);
-
-        res.status(200).json({ success: true, data: stats });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// Cập nhật thông tin User (General Info)
+// ⭐️ CẬP NHẬT THÔNG TIN USER (ĐÃ THÊM DEBUG) ⭐️
 const updateUser = async (req, res) => {
     try {
-        const userId = req.params.id;
-        const requestingUser = req.user;
-        const updateFields = req.body;
+        const userId = req.params.id; // ID từ URL
+        const requestingUser = req.user; // User từ Token
+        const { name, phone, address, avatar } = req.body;
+
+        // --- 🔍 DEBUG LOG START ---
+        console.log("\n--- [DEBUG] UPDATE USER START ---");
+        console.log("1. Target ID (from URL):", userId, `(Type: ${typeof userId})`);
+        console.log("2. Requester ID (from Token):", requestingUser._id, `(Type: ${typeof requestingUser._id})`);
+        console.log("3. Requester Role:", requestingUser.role);
+        console.log("4. Body Data:", { name, phone, address, avatar });
         
-        if (requestingUser.role !== 'admin' && requestingUser.id !== userId) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
+        // So sánh trực tiếp xem tại sao lỗi
+        const isIdMatch = requestingUser._id.toString() === userId;
+        console.log(`5. Check ID Match: ${requestingUser._id} == ${userId} ? -> ${isIdMatch}`);
+        // --- 🔍 DEBUG LOG END ---
+
+        // ⭐️ FIX LỖI 403: Dùng .toString() để so sánh an toàn
+        if (requestingUser.role !== 'admin' && requestingUser._id.toString() !== userId) {
+            console.log("❌ [DEBUG] Update Denied: Forbidden");
+            return res.status(403).json({ success: false, message: 'Forbidden: Bạn không có quyền sửa tài khoản này.' });
         }
 
-        delete updateFields.role;
-        delete updateFields.password;
-        delete updateFields.favorites;
-
-        const updatedUser = await User.findByIdAndUpdate(userId, updateFields, { new: true }).select('-password');
+        const updatedUser = await User.findByIdAndUpdate(
+            userId, 
+            { name, phone, address, avatar }, 
+            { new: true } 
+        ).select('-password');
 
         if (!updatedUser) {
+            console.log("❌ [DEBUG] User not found in DB");
             return res.status(404).json({ success: false, message: 'User not found' });
         }
         
+        console.log("✅ [DEBUG] Update Success!");
         res.status(200).json({ success: true, message: 'Update success', data: updatedUser });
 
     } catch (error) {
+        console.error("❌ [DEBUG] Update User Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Cập nhật thông tin User Profile (Riêng biệt)
-const updateUserProfile = async (req, res) => {
+// ⭐️ UPLOAD AVATAR (ĐÃ FIX PATH) ⭐️
+const uploadAvatar = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-        user.name = req.body.name || user.name;
-        user.phone = req.body.phone || user.phone;
-        
-        if (req.body.password) {
-            const salt = await bcrypt.genSalt(10);
-            user.password = await bcrypt.hash(req.body.password, salt);
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded.' });
         }
 
-        await user.save();
+        const relativePath = `/public/uploads/avatars/${req.file.filename}`;
         
-        const userResponse = user.toObject();
-        delete userResponse.password;
+        // Cập nhật ngay vào DB để đảm bảo đồng bộ
+        const userId = req.user._id;
+        await User.findByIdAndUpdate(userId, { avatar: relativePath });
 
-        res.json({ success: true, data: userResponse, message: 'Profile updated successfully' });
+        res.status(200).json({ 
+            success: true, 
+            message: 'Avatar uploaded successfully',
+            url: relativePath 
+        });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Upload Error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Cập nhật Cài đặt User (Settings)
+// --- 4. CÁC HÀM KHÁC ---
+
+const updateUserProfile = async (req, res) => {
+    return updateUser(req, res);
+};
+
 const updateUserSettings = async (req, res) => {
     try {
         const { settings } = req.body; 
-        
         const user = await User.findByIdAndUpdate(
             req.params.id,
             { $set: { settings: settings } }, 
             { new: true }
         ).select('-password');
-
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
         res.json({ success: true, data: user, message: 'Settings saved' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 };
 
-// Xóa User (Hard delete)
 const deleteUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndDelete(req.params.id);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        await User.findByIdAndDelete(req.params.id);
         res.status(200).json({ success: true, message: 'User deleted' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Upload Avatar
-const uploadAvatar = async (req, res) => {
+const getUserAnalytics = async (req, res) => {
     try {
-        const file = req.file;
-        if (!file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-
-        const basePath = `${req.protocol}://${req.get('host')}/public/uploads/avatars/`;
-        const fullUrl = `${basePath}${file.filename}`;
-
-        const userId = req.user._id; 
-        const user = await User.findByIdAndUpdate(userId, { avatar: fullUrl }, { new: true });
-
-        res.status(200).json({ success: true, url: fullUrl });
+        const { type } = req.query;
+        let startDate = new Date();
+        startDate.setMonth(0, 1); 
+        
+        const stats = await User.aggregate([
+            { $match: { createdAt: { $gte: startDate } } },
+            { $group: { _id: { $month: "$createdAt" }, totalUsers: { $sum: 1 } } },
+            { $sort: { _id: 1 } }
+        ]);
+        res.status(200).json({ success: true, data: stats });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// --- FAVORITES ---
 const toggleFavorite = async (req, res) => {
     try {
         const userId = req.user?._id; 
         const { productId } = req.body;
-        
         if (!userId) return res.status(401).json({ success: false, message: 'Auth failed' });
 
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-        const isFavorited = user.favorites.includes(productId);
-        
-        if (isFavorited) {
+        if (user.favorites.includes(productId)) {
             await User.findByIdAndUpdate(userId, { $pull: { favorites: productId } });
             return res.status(200).json({ success: true, message: 'Removed from favorites' });
         } else {
@@ -373,8 +310,6 @@ const toggleFavorite = async (req, res) => {
 const getFavorites = async (req, res) => {
     try {
         const userId = req.user?._id; 
-        if (!userId) return res.status(401).json({ success: false, message: 'Auth failed' });
-
         const user = await User.findById(userId).populate('favorites');
         res.status(200).json({ success: true, data: user.favorites });
     } catch (error) {
@@ -382,20 +317,45 @@ const getFavorites = async (req, res) => {
     }
 };
 
-// ⭐️ EXPORT TẤT CẢ TẠI ĐÂY ⭐️
+const getCheckoutInfo = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId).select('name phone email');
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        
+        let addressToUse = await Address.findOne({ user: userId, isDefault: true });
+        if (!addressToUse) {
+            addressToUse = await Address.findOne({ user: userId }).sort({ createdAt: -1 });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                recipientName: addressToUse ? addressToUse.recipientName : user.name,
+                phoneNumber: addressToUse ? addressToUse.phoneNumber : user.phone,
+                address: addressToUse ? addressToUse.fullAddress : '',
+                email: user.email
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     register,
     login, 
     forgotPassword,
     verifyOtp,
     setNewPassword,
-    toggleFavorite,
-    getFavorites,
-    updateUser,
-    uploadAvatar,
     getUsers,
+    updateUser, 
+    updateUserProfile,
+    updateUserSettings,
+    uploadAvatar,
     deleteUser,
     getUserAnalytics,
-    updateUserProfile, // Đã định nghĩa ở trên
-    updateUserSettings // Đã định nghĩa ở trên
+    toggleFavorite,
+    getFavorites,
+    getCheckoutInfo
 };

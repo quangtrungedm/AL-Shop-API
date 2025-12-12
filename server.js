@@ -75,6 +75,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/reviews', require('./routes/review.routes'));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 // ✅ SỬA LỖI 2: Dùng '/api/categories' trực tiếp cho đồng bộ
 app.use('/api/categories', categoriesRoutes);
 

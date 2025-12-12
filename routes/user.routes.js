@@ -16,7 +16,11 @@ router.post('/set-new-password', userController.setNewPassword);
 // Thống kê User (Admin Dashboard)
 router.get('/get/analytics', userController.getUserAnalytics);
 
-// Upload Avatar (Nếu bạn chưa setup upload thì tạm comment dòng này để tránh lỗi)
+// ⭐ ROUTE MỚI: Lấy thông tin Checkout (Tự động điền) ⭐
+// Đặt route này TRƯỚC route '/:id' để tránh bị hiểu nhầm là id='checkout-info'
+router.get('/checkout-info', isAuth, userController.getCheckoutInfo);
+
+// Upload Avatar 
 router.post('/upload-avatar', isAuth, singleAvatarUpload, userController.uploadAvatar);
 
 // Yêu thích
@@ -27,12 +31,12 @@ router.post('/favorite/toggle', isAuth, userController.toggleFavorite);
 router.get('/', userController.getUsers); 
 router.delete('/:id', userController.deleteUser);
 
-// --- 4. CẬP NHẬT THÔNG TIN (QUAN TRỌNG) ---
+// --- 4. CẬP NHẬT THÔNG TIN ---
 
-// 👇 Route này để sửa lỗi 404 nút Push Notification 👇
+// Update Settings
 router.put('/:id/settings', isAuth, userController.updateUserSettings);
 
-// 👇 Route này để sửa lỗi nút Update Profile 👇
+// Update Profile (Route này bắt id động, nên để cuối cùng trong nhóm GET/PUT liên quan ID)
 router.put('/:id', isAuth, userController.updateUserProfile);
 
 module.exports = router;

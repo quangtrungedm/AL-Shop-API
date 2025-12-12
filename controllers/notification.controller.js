@@ -1,73 +1,64 @@
 const Notification = require('../models/Notification.model');
 
-// 1. Lấy danh sách thông báo (Kèm số lượng chưa đọc)
+// 1. Lấy danh sách thông báo
 const getNotifications = async (req, res) => {
     try {
         const userId = req.user._id; 
         
-        // Lấy 20 thông báo mới nhất
         const notifications = await Notification.find({ user: userId })
             .sort({ createdAt: -1 })
-            .limit(20); 
+            .limit(50); // Giới hạn 50 tin mới nhất
 
-        // Đếm số lượng chưa đọc (isRead: false)
         const unreadCount = await Notification.countDocuments({ user: userId, isRead: false });
         
         res.status(200).json({ 
             success: true, 
             data: notifications,
-            unreadCount: unreadCount // Trả về luôn để hiển thị badge đỏ
+            unreadCount: unreadCount 
         });
     } catch (error) {
-        console.error("ERROR GET_NOTIFICATIONS:", error);
-        res.status(500).json({ success: false, message: "Lỗi server lấy thông báo." });
+        console.error("GET NOTI ERROR:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 2. Đánh dấu 1 tin là đã đọc
+// 2. Đánh dấu 1 tin đã đọc
 const markAsRead = async (req, res) => {
     try {
-        const { id } = req.params; // Lấy ID từ URL
-        
+        const { id } = req.params;
         await Notification.findByIdAndUpdate(id, { isRead: true });
-        
-        res.status(200).json({ success: true, message: "Đã đánh dấu đã đọc." });
+        res.status(200).json({ success: true, message: "Marked as read" });
     } catch (error) {
-        console.error("ERROR MARK_READ:", error);
-        res.status(500).json({ success: false, message: "Lỗi server." });
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 3. Đánh dấu TẤT CẢ là đã đọc
+// 3. Đánh dấu tất cả đã đọc
 const markAllAsRead = async (req, res) => {
     try {
         const userId = req.user._id;
-        
-        // Cập nhật tất cả thông báo của user này thành isRead: true
         await Notification.updateMany(
             { user: userId, isRead: false },
             { isRead: true }
         );
-
-        res.status(200).json({ success: true, message: "Đã đọc tất cả." });
+        res.status(200).json({ success: true, message: "All marked as read" });
     } catch (error) {
-        console.error("ERROR MARK_ALL_READ:", error);
-        res.status(500).json({ success: false, message: "Lỗi server." });
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 4. API chỉ để đếm số lượng (Dùng cho polling/auto refresh nhẹ)
+// 4. Lấy số lượng chưa đọc (Cho polling nhẹ)
 const getUnreadCount = async (req, res) => {
     try {
         const userId = req.user._id;
         const count = await Notification.countDocuments({ user: userId, isRead: false });
-        
-        res.status(200).json({ success: true, count: count });
+        res.status(200).json({ success: true, count });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Lỗi đếm thông báo." });
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
+// ⭐️ QUAN TRỌNG: PHẢI EXPORT ĐẦY ĐỦ ⭐️
 module.exports = {
     getNotifications,
     markAsRead,
