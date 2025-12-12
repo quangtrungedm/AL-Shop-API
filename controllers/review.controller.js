@@ -24,13 +24,13 @@ const addReview = async (req, res) => {
 
         // Tìm Admin đang bật thông báo
         const admins = await User.find({ role: 'admin', 'settings.pushNotifications': true });
-        
+
         if (admins.length > 0) {
             admins.forEach(admin => {
                 createNotification({
                     userId: admin._id,
-                    title: `💬 Đánh giá mới: ${rating}⭐`,
-                    description: `${user.name} vừa đánh giá "${product.name}".`,
+                    title: `💬 New Review: ${rating}⭐`,
+                    description: `${user.name} just reviewed "${product.name}".`,
                     type: 'NEW_COMMENT', // Loại này sẽ điều hướng về trang Comments
                     referenceId: newReview._id,
                     image: productImage
@@ -38,12 +38,12 @@ const addReview = async (req, res) => {
             });
         }
 
-        res.status(201).json({ success: true, message: 'Đánh giá thành công!', data: newReview });
+        res.status(201).json({ success: true, message: 'Review added successfully!', data: newReview });
 
     } catch (error) {
         // Bắt lỗi trùng lặp (đã đánh giá rồi)
         if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: 'Bạn đã đánh giá sản phẩm này rồi.' });
+            return res.status(400).json({ success: false, message: 'You have already reviewed this product.' });
         }
         res.status(500).json({ success: false, message: error.message });
     }
@@ -79,11 +79,11 @@ const replyReview = async (req, res) => {
     try {
         const { reply } = req.body;
         const review = await Review.findByIdAndUpdate(
-            req.params.id, 
-            { reply: reply }, 
+            req.params.id,
+            { reply: reply },
             { new: true }
         );
-        res.status(200).json({ success: true, message: 'Đã trả lời.', data: review });
+        res.status(200).json({ success: true, message: 'Replied.', data: review });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -94,11 +94,11 @@ const toggleReviewStatus = async (req, res) => {
     try {
         const { isActive } = req.body;
         const review = await Review.findByIdAndUpdate(
-            req.params.id, 
-            { isActive: isActive }, 
+            req.params.id,
+            { isActive: isActive },
             { new: true }
         );
-        res.status(200).json({ success: true, message: 'Đã cập nhật trạng thái.', data: review });
+        res.status(200).json({ success: true, message: 'Status updated.', data: review });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -108,7 +108,7 @@ const toggleReviewStatus = async (req, res) => {
 const deleteReview = async (req, res) => {
     try {
         await Review.findByIdAndDelete(req.params.id);
-        res.status(200).json({ success: true, message: 'Đã xóa đánh giá.' });
+        res.status(200).json({ success: true, message: 'Review deleted.' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

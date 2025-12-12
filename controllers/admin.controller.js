@@ -20,28 +20,28 @@ const loginAdmin = async (req, res) => {
         // ⭐️ DEBUG 2: Kiểm tra User tồn tại ⭐️
         if (!user) {
             console.log(`❌ [SERVER DEBUG] LỖI 1: KHÔNG tìm thấy User với email: ${email}`);
-            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
+            return res.status(401).json({ success: false, message: 'Invalid login credentials.' });
         }
-        
+
         console.log(`✅ [SERVER DEBUG] Đã tìm thấy User (ID: ${user._id}). Role DB: ${user.role}`);
 
         // 2. So sánh Mật khẩu (NGUYÊN NHÂN THƯỜNG GẶP NHẤT)
         const isMatch = await bcrypt.compare(password, user.password);
-        
+
         // ⭐️ DEBUG 3: Kết quả so sánh mật khẩu ⭐️
         console.log(`🔑 [SERVER DEBUG] Mật khẩu nhập vào có khớp không (isMatch): ${isMatch}`);
-        
+
         if (!isMatch) {
             console.log('❌ [SERVER DEBUG] LỖI 2: Mật khẩu không khớp.');
-            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
+            return res.status(401).json({ success: false, message: 'Invalid login credentials.' });
         }
 
         // 3. KIỂM TRA VAI TRÒ ADMIN
         if (user.role !== 'admin') {
             console.log(`❌ [SERVER DEBUG] LỖI 3: Tài khoản không có vai trò Admin. Role hiện tại: ${user.role}`);
-            return res.status(403).json({ success: false, message: 'Bạn không có quyền truy cập quản trị.' });
+            return res.status(403).json({ success: false, message: 'You do not have administrative access.' });
         }
-        
+
         // Thành công
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
             expiresIn: '30d',
@@ -49,10 +49,10 @@ const loginAdmin = async (req, res) => {
 
         const userWithoutPassword = user.toObject();
         delete userWithoutPassword.password;
-        
+
         console.log('🎉 [SERVER DEBUG] Đăng nhập Admin thành công!');
         console.log('====================================================');
-        
+
         res.json({
             success: true,
             token,
@@ -62,7 +62,7 @@ const loginAdmin = async (req, res) => {
         console.error("❌ [SERVER DEBUG] LỖI SERVER 500: Admin Login failed:", error);
         console.log('====================================================');
         // Trả về lỗi server nội bộ (chú ý không để lộ chi tiết lỗi ra ngoài)
-        res.status(500).json({ success: false, message: 'Lỗi server nội bộ. Vui lòng kiểm tra console.' });
+        res.status(500).json({ success: false, message: 'Internal server error. Please check console.' });
     }
 };
 
@@ -82,7 +82,7 @@ const getUserById = async (req, res) => {
     try {
         const user = await User.findById(req.params.id).select('-password');
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy user' });
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
         res.json({ success: true, data: user });
     } catch (error) {
@@ -96,15 +96,15 @@ const updateUser = async (req, res) => {
     try {
         const userId = req.params.id;
         // Admin có thể cập nhật mọi thông tin, bao gồm cả Role
-        const { name, email, phone, address, avatar, role } = req.body; 
+        const { name, email, phone, address, avatar, role } = req.body;
 
         if (!name || !email) {
-            return res.status(400).json({ success: false, message: 'Tên và Email không được để trống.' });
+            return res.status(400).json({ success: false, message: 'Name and Email cannot be empty.' });
         }
-        
+
         // Kiểm tra xem Admin có đang cố gắng hạ cấp tài khoản của chính mình không (Tùy chọn)
         if (req.user && req.user._id.toString() === userId && role === 'user') {
-             return res.status(403).json({ success: false, message: 'Không thể hạ cấp tài khoản Admin đang hoạt động.' });
+            return res.status(403).json({ success: false, message: 'Cannot downgrade active Admin account.' });
         }
 
 
@@ -123,18 +123,18 @@ const updateUser = async (req, res) => {
         ).select('-password');
 
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng để cập nhật.' });
+            return res.status(404).json({ success: false, message: 'User to update not found.' });
         }
 
         res.status(200).json({
             success: true,
-            message: 'Cập nhật thông tin người dùng thành công.',
+            message: 'User information updated successfully.',
             data: user
         });
 
     } catch (error) {
         if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: 'Email này đã được sử dụng bởi người khác.' });
+            return res.status(400).json({ success: false, message: 'This email is already used by another user.' });
         }
         console.error("ERROR: Admin updateUser failed:", error);
         res.status(400).json({ success: false, message: error.message });
@@ -145,14 +145,14 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
     try {
         const userId = req.params.id;
-        
+
         // Kiểm tra xem Admin có tự xóa mình không
         if (req.user && req.user._id.toString() === userId) {
-             return res.status(403).json({ success: false, message: 'Admin không được tự xóa tài khoản của mình.' });
+            return res.status(403).json({ success: false, message: 'Admin cannot delete their own account.' });
         }
 
         await User.findByIdAndDelete(userId);
-        res.json({ success: true, message: 'Đã xóa user' });
+        res.json({ success: true, message: 'User deleted' });
     } catch (error) {
         console.error("ERROR: Admin deleteUser failed:", error);
         res.status(500).json({ success: false, message: error.message });

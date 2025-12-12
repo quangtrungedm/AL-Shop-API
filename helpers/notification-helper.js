@@ -22,12 +22,12 @@ const createNotification = async ({ userId, title, description, type, image, ref
         });
 
         await newNotification.save();
-        console.log(`[Notification] Đã tạo thông báo mới cho user ${userId}: ${title}`);
+        console.log(`[Notification] Created new notification for user ${userId}: ${title}`);
         return newNotification;
 
     } catch (error) {
-        console.error("ERROR: Không thể tạo thông báo mới:", error);
-        return null; 
+        console.error("ERROR: Could not create new notification:", error);
+        return null;
     }
 };
 

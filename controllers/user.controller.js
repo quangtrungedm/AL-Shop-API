@@ -2,9 +2,9 @@ const User = require('../models/User.model');
 const Product = require('../models/Product.model');
 const PasswordReset = require('../models/PasswordReset.model');
 const Address = require('../models/Address.model');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { sendEmail } = require('../helpers/send-email'); 
+const { sendEmail } = require('../helpers/send-email');
 
 // --- 1. XÁC THỰC (AUTH) ---
 
@@ -12,25 +12,25 @@ const register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
         if (!name || !email || !password) {
-            return res.status(400).json({ success: false, message: 'Vui lòng điền đầy đủ thông tin.' });
+            return res.status(400).json({ success: false, message: 'Please provide all required information.' });
         }
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Email đã tồn tại.' });
+            return res.status(400).json({ success: false, message: 'Email already exists.' });
         }
-        
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const user = await User.create({ 
-            name, 
-            email, 
-            password: hashedPassword 
-        }); 
-        
+        const user = await User.create({
+            name,
+            email,
+            password: hashedPassword
+        });
+
         res.status(201).json({
             success: true,
-            message: 'Đăng ký thành công.',
+            message: 'Registration successful.',
             data: { id: user._id, name: user.name, email: user.email }
         });
     } catch (error) {
@@ -45,13 +45,13 @@ const login = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
+            return res.status(401).json({ success: false, message: 'Invalid login credentials.' });
         }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Thông tin đăng nhập không chính xác' });
+            return res.status(401).json({ success: false, message: 'Invalid login credentials.' });
         }
-        
+
         const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
             expiresIn: '30d',
         });
@@ -72,91 +72,91 @@ const login = async (req, res) => {
 
 // --- 2. QUÊN MẬT KHẨU & OTP ---
 
-const forgotPassword = async (req, res) => { 
+const forgotPassword = async (req, res) => {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: 'Vui lòng nhập email.' });
+    if (!email) return res.status(400).json({ success: false, message: 'Please enter your email.' });
 
     try {
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(200).json({ success: true, message: 'Nếu email tồn tại, OTP đã được gửi đi.' });
+            return res.status(200).json({ success: true, message: 'If the email exists, an OTP has been sent.' });
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = Date.now() + 5 * 60000; // 5 phút
-        
+
         await PasswordReset.findOneAndUpdate(
             { email },
             { otp: otp, expiresAt: expiresAt, verified: false },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-        
+
         const emailContent = `
-            <h1>Mã xác nhận Đặt lại mật khẩu AL-Shop</h1>
-            <p>Mã OTP của bạn là: <strong>${otp}</strong></p>
-            <p>Mã này sẽ hết hạn trong 5 phút.</p>
+            <h1>AL-Shop Password Reset Verification Code</h1>
+            <p>Your OTP code is: <strong>${otp}</strong></p>
+            <p>This code will expire in 5 minutes.</p>
         `;
 
         const emailSent = await sendEmail({
             to: email,
-            subject: 'Mã OTP Đặt lại mật khẩu AL-Shop',
+            subject: 'AL-Shop Password Reset OTP',
             htmlContent: emailContent,
-        }); 
+        });
 
         if (emailSent) {
-            return res.status(200).json({ success: true, message: 'Mã OTP đã được gửi đến email của bạn.' });
+            return res.status(200).json({ success: true, message: 'OTP code has been sent to your email.' });
         } else {
-            return res.status(500).json({ success: false, message: 'Lỗi dịch vụ gửi mail.' });
+            return res.status(500).json({ success: false, message: 'Email service error.' });
         }
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Lỗi server khi gửi OTP.' });
+        res.status(500).json({ success: false, message: 'Server error when sending OTP.' });
     }
 };
 
 const verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
-        if (!email || !otp) return res.status(400).json({ success: false, message: 'Thiếu thông tin.' });
+        if (!email || !otp) return res.status(400).json({ success: false, message: 'Missing information.' });
 
         const now = Date.now();
         const reset = await PasswordReset.findOne({ email, otp });
-        
-        if (!reset) return res.status(400).json({ success: false, message: 'Mã xác thực không hợp lệ.' });
-        if (reset.expiresAt < now) return res.status(400).json({ success: false, message: 'OTP đã hết hạn.' });
-        if (reset.verified) return res.status(400).json({ success: false, message: 'OTP đã được xác minh.' });
+
+        if (!reset) return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+        if (reset.expiresAt < now) return res.status(400).json({ success: false, message: 'OTP has expired.' });
+        if (reset.verified) return res.status(400).json({ success: false, message: 'OTP has already been verified.' });
 
         reset.verified = true;
         await reset.save();
 
-        res.json({ success: true, message: 'Xác thực OTP thành công.' });
+        res.json({ success: true, message: 'OTP verification successful.' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Lỗi server.' });
+        res.status(500).json({ success: false, message: 'Server error.' });
     }
 };
 
 const setNewPassword = async (req, res) => {
     try {
-        const { email, newPassword } = req.body; 
-        if (!email || !newPassword) return res.status(400).json({ success: false, message: 'Thiếu thông tin.' });
+        const { email, newPassword } = req.body;
+        if (!email || !newPassword) return res.status(400).json({ success: false, message: 'Missing information.' });
 
         const reset = await PasswordReset.findOne({ email, verified: true });
-        if (!reset) return res.status(400).json({ success: false, message: 'Yêu cầu không hợp lệ.' });
+        if (!reset) return res.status(400).json({ success: false, message: 'Invalid request.' });
 
         if (reset.expiresAt < Date.now()) {
             await PasswordReset.deleteMany({ email });
-            return res.status(400).json({ success: false, message: 'Phiên hết hạn.' });
+            return res.status(400).json({ success: false, message: 'Session expired.' });
         }
-        
+
         const user = await User.findOne({ email });
         if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
-        
+
         await PasswordReset.deleteMany({ email });
 
-        res.json({ success: true, message: 'Đổi mật khẩu thành công.' });
+        res.json({ success: true, message: 'Password changed successfully.' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Lỗi server.' });
     }
@@ -186,7 +186,7 @@ const updateUser = async (req, res) => {
         console.log("2. Requester ID (from Token):", requestingUser._id, `(Type: ${typeof requestingUser._id})`);
         console.log("3. Requester Role:", requestingUser.role);
         console.log("4. Body Data:", { name, phone, address, avatar });
-        
+
         // So sánh trực tiếp xem tại sao lỗi
         const isIdMatch = requestingUser._id.toString() === userId;
         console.log(`5. Check ID Match: ${requestingUser._id} == ${userId} ? -> ${isIdMatch}`);
@@ -195,20 +195,20 @@ const updateUser = async (req, res) => {
         // ⭐️ FIX LỖI 403: Dùng .toString() để so sánh an toàn
         if (requestingUser.role !== 'admin' && requestingUser._id.toString() !== userId) {
             console.log("❌ [DEBUG] Update Denied: Forbidden");
-            return res.status(403).json({ success: false, message: 'Forbidden: Bạn không có quyền sửa tài khoản này.' });
+            return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to edit this account.' });
         }
 
         const updatedUser = await User.findByIdAndUpdate(
-            userId, 
-            { name, phone, address, avatar }, 
-            { new: true } 
+            userId,
+            { name, phone, address, avatar },
+            { new: true }
         ).select('-password');
 
         if (!updatedUser) {
             console.log("❌ [DEBUG] User not found in DB");
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-        
+
         console.log("✅ [DEBUG] Update Success!");
         res.status(200).json({ success: true, message: 'Update success', data: updatedUser });
 
@@ -226,15 +226,15 @@ const uploadAvatar = async (req, res) => {
         }
 
         const relativePath = `/public/uploads/avatars/${req.file.filename}`;
-        
+
         // Cập nhật ngay vào DB để đảm bảo đồng bộ
         const userId = req.user._id;
         await User.findByIdAndUpdate(userId, { avatar: relativePath });
 
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: 'Avatar uploaded successfully',
-            url: relativePath 
+            url: relativePath
         });
     } catch (error) {
         console.error("Upload Error:", error);
@@ -250,10 +250,10 @@ const updateUserProfile = async (req, res) => {
 
 const updateUserSettings = async (req, res) => {
     try {
-        const { settings } = req.body; 
+        const { settings } = req.body;
         const user = await User.findByIdAndUpdate(
             req.params.id,
-            { $set: { settings: settings } }, 
+            { $set: { settings: settings } },
             { new: true }
         ).select('-password');
         res.json({ success: true, data: user, message: 'Settings saved' });
@@ -275,8 +275,8 @@ const getUserAnalytics = async (req, res) => {
     try {
         const { type } = req.query;
         let startDate = new Date();
-        startDate.setMonth(0, 1); 
-        
+        startDate.setMonth(0, 1);
+
         const stats = await User.aggregate([
             { $match: { createdAt: { $gte: startDate } } },
             { $group: { _id: { $month: "$createdAt" }, totalUsers: { $sum: 1 } } },
@@ -290,7 +290,7 @@ const getUserAnalytics = async (req, res) => {
 
 const toggleFavorite = async (req, res) => {
     try {
-        const userId = req.user?._id; 
+        const userId = req.user?._id;
         const { productId } = req.body;
         if (!userId) return res.status(401).json({ success: false, message: 'Auth failed' });
 
@@ -309,7 +309,7 @@ const toggleFavorite = async (req, res) => {
 
 const getFavorites = async (req, res) => {
     try {
-        const userId = req.user?._id; 
+        const userId = req.user?._id;
         const user = await User.findById(userId).populate('favorites');
         res.status(200).json({ success: true, data: user.favorites });
     } catch (error) {
@@ -322,7 +322,7 @@ const getCheckoutInfo = async (req, res) => {
         const userId = req.user.id;
         const user = await User.findById(userId).select('name phone email');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-        
+
         let addressToUse = await Address.findOne({ user: userId, isDefault: true });
         if (!addressToUse) {
             addressToUse = await Address.findOne({ user: userId }).sort({ createdAt: -1 });
@@ -344,12 +344,12 @@ const getCheckoutInfo = async (req, res) => {
 
 module.exports = {
     register,
-    login, 
+    login,
     forgotPassword,
     verifyOtp,
     setNewPassword,
     getUsers,
-    updateUser, 
+    updateUser,
     updateUserProfile,
     updateUserSettings,
     uploadAvatar,

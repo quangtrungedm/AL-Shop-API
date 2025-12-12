@@ -13,21 +13,21 @@ const FILE_TYPE_MAP = {
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const isValid = FILE_TYPE_MAP[file.mimetype];
-        let uploadError = new Error('Sai định dạng ảnh (chỉ chấp nhận .png, .jpeg, .jpg)');
+        let uploadError = new Error('Invalid file type (png, jpeg, jpg only)');
 
         if (isValid) {
             uploadError = null;
         }
-        
+
         // ⭐️ Đường dẫn lưu ảnh: Thư mục gốc/public/uploads
         const uploadPath = path.join(__dirname, '../public/uploads');
-        
+
         // Tạo thư mục nếu chưa tồn tại
-        if (!fs.existsSync(uploadPath)){
+        if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
         }
 
-        cb(uploadError, uploadPath); 
+        cb(uploadError, uploadPath);
     },
     filename: function (req, file, cb) {
         // Tạo tên file duy nhất: tên-gốc-thời-gian.đuôi

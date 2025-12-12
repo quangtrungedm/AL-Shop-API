@@ -19,7 +19,7 @@ module.exports = {
     getCategoryById: async (req, res) => {
         try {
             const category = await Category.findById(req.params.id);
-            if (!category) return res.status(404).json({ success: false, message: 'Không tìm thấy' });
+            if (!category) return res.status(404).json({ success: false, message: 'Not found' });
             res.status(200).json({ success: true, data: category });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
@@ -31,7 +31,7 @@ module.exports = {
         try {
             let category = new Category({
                 name: req.body.name,
-                isActive: true 
+                isActive: true
             });
             category = await category.save();
             res.status(201).json({ success: true, data: category });
@@ -45,13 +45,13 @@ module.exports = {
         try {
             const category = await Category.findByIdAndUpdate(
                 req.params.id,
-                { name: req.body.name }, 
+                { name: req.body.name },
                 { new: true } // Trả về data mới sau khi update
             );
 
-            if (!category) return res.status(404).json({ success: false, message: 'Không tìm thấy' });
+            if (!category) return res.status(404).json({ success: false, message: 'Not found' });
 
-            res.status(200).json({ success: true, message: 'Cập nhật thành công', data: category });
+            res.status(200).json({ success: true, message: 'Update successful', data: category });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -61,12 +61,12 @@ module.exports = {
     toggleStatus: async (req, res) => {
         try {
             const category = await Category.findById(req.params.id);
-            if (!category) return res.status(404).json({ success: false, message: 'Không tìm thấy' });
+            if (!category) return res.status(404).json({ success: false, message: 'Not found' });
 
             category.isActive = !category.isActive;
             await category.save();
-            
-            const msg = category.isActive ? 'Đã hiện danh mục' : 'Đã ẩn danh mục';
+
+            const msg = category.isActive ? 'Category visible' : 'Category hidden';
             res.status(200).json({ success: true, message: msg, data: category });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
@@ -77,8 +77,8 @@ module.exports = {
     deleteCategory: async (req, res) => {
         try {
             const category = await Category.findByIdAndDelete(req.params.id);
-            if (!category) return res.status(404).json({ success: false, message: 'Không tìm thấy' });
-            res.status(200).json({ success: true, message: 'Đã xóa vĩnh viễn' });
+            if (!category) return res.status(404).json({ success: false, message: 'Not found' });
+            res.status(200).json({ success: true, message: 'Permanently deleted' });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
         }

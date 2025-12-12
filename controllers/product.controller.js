@@ -2,8 +2,8 @@
 
 const Product = require('../models/Product.model');
 const Category = require('../models/Category.model'); // [MỚI] Import model Category
-const User = require('../models/User.model'); 
-const { createNotification } = require('../helpers/notification-helper'); 
+const User = require('../models/User.model');
+const { createNotification } = require('../helpers/notification-helper');
 
 // ==========================================
 // 1. CÁC HÀM LẤY DỮ LIỆU (GET)
@@ -14,8 +14,8 @@ exports.getProducts = async (req, res) => {
     try {
         // [QUAN TRỌNG] Thêm .populate('category') để lấy chi tiết danh mục
         const products = await Product.find()
-            .populate('category') 
-            .sort({ createdAt: -1 }); 
+            .populate('category')
+            .sort({ createdAt: -1 });
 
         res.json({ success: true, data: products });
     } catch (error) {
@@ -30,7 +30,7 @@ exports.getProductById = async (req, res) => {
             .populate('category'); // [MỚI] Populate category
 
         if (!product) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
+            return res.status(404).json({ success: false, message: 'Product not found' });
         }
         res.json({ success: true, data: product });
     } catch (error) {
@@ -41,8 +41,8 @@ exports.getProductById = async (req, res) => {
 // Lấy danh sách sản phẩm theo mảng ID
 exports.getProductsByIds = async (req, res) => {
     try {
-        const { ids } = req.query; 
-        if (!ids) return res.status(400).json({ success: false, message: 'Thiếu tham số IDs' });
+        const { ids } = req.query;
+        if (!ids) return res.status(400).json({ success: false, message: 'Missing IDs parameter' });
 
         const idArray = ids.split(',');
         const products = await Product.find({ '_id': { $in: idArray } })
@@ -63,18 +63,18 @@ exports.createProduct = async (req, res) => {
         // --- BƯỚC 1: Validate Danh mục (MỚI) ---
         // Kiểm tra xem ID danh mục gửi lên có tồn tại không
         if (req.body.category) {
-             const category = await Category.findById(req.body.category);
-             if (!category) {
-                 return res.status(400).json({ success: false, message: 'Danh mục không hợp lệ hoặc không tồn tại.' });
-             }
+            const category = await Category.findById(req.body.category);
+            if (!category) {
+                return res.status(400).json({ success: false, message: 'Invalid or non-existent category.' });
+            }
         } else {
-             return res.status(400).json({ success: false, message: 'Vui lòng chọn danh mục.' });
+            return res.status(400).json({ success: false, message: 'Please select a category.' });
         }
 
         // --- BƯỚC 2: Kiểm tra file ảnh ---
         const file = req.file;
         if (!file) {
-            return res.status(400).json({ success: false, message: 'Vui lòng chọn ảnh cho sản phẩm.' });
+            return res.status(400).json({ success: false, message: 'Please select an image for the product.' });
         }
 
         // Tạo đường dẫn URL ảnh
@@ -89,7 +89,7 @@ exports.createProduct = async (req, res) => {
             price: req.body.price,
             category: req.body.category, // ID danh mục
             stock: req.body.countInStock || req.body.stock || 0,
-            image: [imagePath], 
+            image: [imagePath],
             isActive: true // Mặc định là hiển thị
         });
 
@@ -97,7 +97,7 @@ exports.createProduct = async (req, res) => {
         await product.save();
 
         if (!product) {
-            return res.status(500).json({ success: false, message: 'Không thể tạo sản phẩm' });
+            return res.status(500).json({ success: false, message: 'Could not create product' });
         }
 
         // --- BƯỚC 4: Gửi thông báo cho Admin (Tùy chọn) ---
@@ -105,18 +105,18 @@ exports.createProduct = async (req, res) => {
         if (adminUser) {
             await createNotification({
                 userId: adminUser._id,
-                title: `Sản phẩm mới: ${product.name}`,
-                description: `Sản phẩm ID: ${product._id.toString().slice(-6)} đã được thêm vào kho.`,
+                title: `New Product: ${product.name}`,
+                description: `Product ID: ${product._id.toString().slice(-6)} has been added to inventory.`,
                 type: 'NEW_PRODUCT',
                 referenceId: product._id,
-                image: imagePath 
+                image: imagePath
             });
         }
 
-        res.status(201).json({ 
-            success: true, 
+        res.status(201).json({
+            success: true,
             data: product,
-            message: 'Thêm sản phẩm thành công!' 
+            message: 'Product added successfully!'
         });
 
     } catch (error) {
@@ -135,14 +135,14 @@ exports.updateProduct = async (req, res) => {
         if (req.body.category) {
             const category = await Category.findById(req.body.category);
             if (!category) {
-                return res.status(400).json({ success: false, message: 'Danh mục không hợp lệ.' });
+                return res.status(400).json({ success: false, message: 'Invalid category.' });
             }
         }
 
         // Tìm sản phẩm cũ
         const product = await Product.findById(req.params.id);
         if (!product) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
+            return res.status(404).json({ success: false, message: 'Product not found' });
         }
 
         // Xử lý ảnh (Giữ ảnh cũ hoặc thay ảnh mới)
@@ -152,7 +152,7 @@ exports.updateProduct = async (req, res) => {
         if (file) {
             const fileName = file.filename;
             const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
-            imagePath = [`${basePath}${fileName}`]; 
+            imagePath = [`${basePath}${fileName}`];
         } else {
             imagePath = product.image;
         }
@@ -171,7 +171,7 @@ exports.updateProduct = async (req, res) => {
             { new: true } // Trả về dữ liệu mới sau khi update
         );
 
-        res.json({ success: true, data: updatedProduct, message: 'Cập nhật thành công!' });
+        res.json({ success: true, data: updatedProduct, message: 'Update successful!' });
 
     } catch (error) {
         console.error("Lỗi Update:", error);
@@ -186,10 +186,10 @@ exports.updateProduct = async (req, res) => {
 exports.toggleProductStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { isActive } = req.body; 
+        const { isActive } = req.body;
 
         if (typeof isActive !== 'boolean') {
-            return res.status(400).json({ success: false, message: 'Trạng thái isActive phải là Boolean.' });
+            return res.status(400).json({ success: false, message: 'isActive status must be Boolean.' });
         }
 
         const updatedProduct = await Product.findByIdAndUpdate(
@@ -199,11 +199,11 @@ exports.toggleProductStatus = async (req, res) => {
         );
 
         if (!updatedProduct) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
+            return res.status(404).json({ success: false, message: 'Product not found' });
         }
-        
-        const action = isActive ? 'hiển thị' : 'ẩn';
-        res.json({ success: true, message: `Đã ${action} sản phẩm thành công!`, data: updatedProduct });
+
+        const action = isActive ? 'visible' : 'hidden';
+        res.json({ success: true, message: `Product is now ${action}!`, data: updatedProduct });
 
     } catch (error) {
         console.error("Lỗi Toggle Status:", error);
