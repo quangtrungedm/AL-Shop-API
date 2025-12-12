@@ -3,12 +3,12 @@ const Product = require('../models/Product.model');
 const User = require('../models/User.model'); 
 const { createNotification } = require('../helpers/notification-helper'); 
 
-// --- HELPERS (Hàm hỗ trợ) ---
+// --- HELPERS (Utility Functions) ---
 
-// Lấy ID người dùng an toàn từ request
+// Get User ID safely from request
 const getUserId = (req) => req.user?._id || req.user?.id;
 
-// Tính toán thời gian cho biểu đồ thống kê
+// Calculate date range for chart analytics
 const getDateRangeAndGroupBy = (type) => {
     const today = new Date();
     let startDate = new Date();
@@ -38,11 +38,10 @@ const getDateRangeAndGroupBy = (type) => {
     return { startDate, groupBy };
 };
 
-// Hàm lấy ảnh đại diện của đơn hàng (ảnh sản phẩm đầu tiên)
+// Function to get the thumbnail image URL for an order
 const getOrderImage = async (orderProducts) => {
     if (orderProducts && orderProducts.length > 0) {
         const firstProductItem = orderProducts[0];
-        // Nếu product là ID
         const productId = firstProductItem.product._id || firstProductItem.product; 
         
         try {
@@ -58,10 +57,10 @@ const getOrderImage = async (orderProducts) => {
 };
 
 // ==========================================
-// 1. CÁC HÀM QUẢN LÝ ĐƠN HÀNG (CRUD)
+// 1. ORDER MANAGEMENT FUNCTIONS (CRUD)
 // ==========================================
 
-// Lấy toàn bộ đơn hàng (Cho Admin)
+// Get all orders (Admin)
 const getOrders = async (req, res) => {
     try {
         const orders = await Order.find()
@@ -77,11 +76,11 @@ const getOrders = async (req, res) => {
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
         console.error("Error getOrders:", error);
-        res.status(500).json({ success: false, message: "Lỗi lấy danh sách đơn hàng." });
+        res.status(500).json({ success: false, message: "Error fetching order list." });
     }
 };
 
-// Lấy đơn hàng của người dùng hiện tại
+// Get orders by current user
 const getOrdersByUser = async (req, res) => {
     try {
         const userId = getUserId(req);
@@ -92,11 +91,11 @@ const getOrdersByUser = async (req, res) => {
 
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Lỗi lấy đơn hàng của bạn." });
+        res.status(500).json({ success: false, message: "Error fetching your orders." });
     }
 };
 
-// Lấy chi tiết 1 đơn hàng
+// Get 1 order detail
 const getOrderById = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id)
@@ -106,56 +105,56 @@ const getOrderById = async (req, res) => {
             .lean();
 
         if (!order) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng.' });
+            return res.status(404).json({ success: false, message: 'Order not found.' });
         }
         res.status(200).json({ success: true, data: order });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Lỗi lấy chi tiết đơn hàng." });
+        res.status(500).json({ success: false, message: "Error fetching order details." });
     }
 };
 
-// --- TẠO ĐƠN HÀNG MỚI ---
+// --- CREATE NEW ORDER ---
 const createOrder = async (req, res) => {
     try {
         const userId = getUserId(req);
         
-        // 1. Lưu đơn hàng
+        // 1. Save the order
         const newOrder = await Order.create({
             ...req.body,
             user: userId,
         });
 
-        // 2. Lấy ảnh thumbnail (Non-blocking)
+        // 2. Get thumbnail image (Non-blocking)
         const imageUrl = await getOrderImage(newOrder.products);
+        const formattedTotal = newOrder.total?.toLocaleString('en-US', {style:'currency', currency:'USD'});
 
-        // 3. Gửi Thông báo (Logic Mới)
+        // 3. Send Notifications
         
-        // A. Báo cho KHÁCH HÀNG
+        // A. Notify CUSTOMER
         createNotification({
             userId: userId,
-            title: `Đặt hàng thành công! #${newOrder._id.toString().slice(-6)}`,
-            description: `Tổng tiền: ${newOrder.total?.toLocaleString('en-US', {style:'currency', currency:'USD'})}. Chúng tôi đang xử lý đơn hàng.`,
+            // ⭐️ TRANSLATED: Order placed successfully!
+            title: `Order placed successfully! #${newOrder._id.toString().slice(-6).toUpperCase()}`,
+            description: `Total: ${formattedTotal}. Your order is being processed.`,
             type: 'ORDER_STATUS',
             referenceId: newOrder._id,
             image: imageUrl, 
         }).catch(console.error);
 
-        // B. Báo cho ADMIN (Chỉ gửi cho ai ĐANG BẬT Push Notification)
-        const adminsToNotify = await User.find({ 
-            role: 'admin', 
-            'settings.pushNotifications': true 
-        }).select('_id');
+        // B. Notify ADMINS
+        const adminsToNotify = await User.find({ role: 'admin' }).select('_id');
 
         if (adminsToNotify.length > 0) {
             adminsToNotify.forEach(admin => {
                 createNotification({
                     userId: admin._id,
-                    title: `📦 Đơn hàng mới: #${newOrder._id.toString().slice(-6)}`,
-                    description: `Khách hàng vừa đặt đơn trị giá ${newOrder.total?.toLocaleString('en-US', {style:'currency', currency:'USD'})}.`,
+                    // ⭐️ TRANSLATED: New order received
+                    title: `📦 New Order Received: #${newOrder._id.toString().slice(-6).toUpperCase()}`,
+                    description: `Customer placed order worth ${formattedTotal}.`,
                     type: 'NEW_ORDER',
                     referenceId: newOrder._id,
                     image: imageUrl
-                });
+                }).catch(console.error);
             });
         }
 
@@ -167,48 +166,47 @@ const createOrder = async (req, res) => {
     }
 };
 
-// --- CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG ---
-// (Bao gồm logic "Nhận được hàng" -> Delivered)
+// --- UPDATE ORDER STATUS ---
 const updateOrder = async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
         
         if (status && !validStatuses.includes(status)) {
-            return res.status(400).json({ success: false, message: "Trạng thái không hợp lệ." });
+            return res.status(400).json({ success: false, message: "Invalid status." });
         }
 
-        // Cập nhật DB
+        // Update DB
         const order = await Order.findByIdAndUpdate(
             req.params.id, 
             { status: status }, 
             { new: true }
-        ).populate('user', 'name'); // Populate user để lấy tên hiển thị trong log nếu cần
+        ).populate('user', 'name'); 
 
         if (!order) {
-            return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại." });
+            return res.status(404).json({ success: false, message: "Order not found." });
         }
 
-        // --- LOGIC THÔNG BÁO THEO TRẠNG THÁI ---
+        // --- NOTIFICATION LOGIC ---
         if (status) {
             const imageUrl = await getOrderImage(order.products);
             const orderCode = order._id.toString().slice(-6).toUpperCase();
             
-            let userTitle = `Cập nhật đơn hàng #${orderCode}`;
-            let userDesc = `Trạng thái đơn hàng của bạn đã chuyển sang: ${status.toUpperCase()}`;
+            let userTitle = `Order Update #${orderCode}`;
+            let userDesc = `Your order status changed to: ${status.toUpperCase()}`;
             
-            // Tùy chỉnh thông điệp cho hay hơn
+            // Customize message
             if (status === 'shipped') {
-                userDesc = "Đơn hàng của bạn đang trên đường vận chuyển 🚚";
+                userDesc = "Your order is currently out for delivery 🚚";
             } else if (status === 'delivered') {
-                userTitle = "Giao hàng thành công! 🎉";
-                userDesc = "Bạn đã nhận được hàng. Hãy đánh giá sản phẩm để nhận xu nhé!";
+                userTitle = "Delivery successful! 🎉";
+                userDesc = "You have received your order. Please review your products!";
             } else if (status === 'cancelled') {
-                userTitle = "Đơn hàng đã bị hủy ❌";
-                userDesc = "Rất tiếc, đơn hàng của bạn đã bị hủy. Vui lòng liên hệ CSKH nếu cần hỗ trợ.";
+                userTitle = "Order Cancelled ❌";
+                userDesc = "We regret to inform you that your order has been cancelled.";
             }
 
-            // 1. Gửi cho User
+            // 1. Notify User
             createNotification({
                 userId: order.user._id,
                 title: userTitle,
@@ -218,14 +216,14 @@ const updateOrder = async (req, res) => {
                 image: imageUrl
             }).catch(console.error);
 
-            // 2. Gửi cho Admin (Chỉ khi Hoàn thành hoặc Hủy để Admin nắm tình hình)
+            // 2. Notify Admin (Only for delivered/cancelled)
             if (status === 'delivered' || status === 'cancelled') {
-                const adminsToNotify = await User.find({ role: 'admin', 'settings.pushNotifications': true }).select('_id');
+                const adminsToNotify = await User.find({ role: 'admin' }).select('_id');
                 adminsToNotify.forEach(admin => {
                     createNotification({
                         userId: admin._id,
-                        title: `🔔 Cập nhật: #${orderCode} - ${status.toUpperCase()}`,
-                        description: `Đơn của ${order.user.name} đã chuyển sang trạng thái ${status}.`,
+                        title: `🔔 Status Change: #${orderCode} - ${status.toUpperCase()}`,
+                        description: `Order from ${order.user.name} is now ${status}.`,
                         type: 'ORDER_UPDATE',
                         referenceId: order._id
                     });
@@ -233,14 +231,14 @@ const updateOrder = async (req, res) => {
             }
         }
 
-        res.status(200).json({ success: true, data: order, message: "Cập nhật trạng thái thành công." });
+        res.status(200).json({ success: true, data: order, message: "Status updated successfully." });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 // ==========================================
-// 2. CÁC HÀM THỐNG KÊ (ANALYTICS)
+// 2. ANALYTICS FUNCTIONS
 // ==========================================
 
 const getDashboardStats = async (req, res) => {
@@ -260,7 +258,7 @@ const getDashboardStats = async (req, res) => {
             data: { orders: stats.totalOrders, revenue: stats.totalRevenue, users: userCount, products: productCount }
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Lỗi thống kê." });
+        res.status(500).json({ success: false, message: "Error fetching dashboard statistics." });
     }
 };
 
