@@ -3,14 +3,16 @@ const router = express.Router();
 const notificationController = require('../controllers/notification.controller');
 const { isAuth } = require('../middleware/auth'); 
 
-// GET /api/notifications
+// 1. Lấy danh sách (Kèm số lượng chưa đọc)
 router.get('/', isAuth, notificationController.getNotifications); 
 
-// ⭐ FIX: Thêm route để lấy số lượng thông báo chưa đọc
-// GET /api/notifications/count
+// 2. Chỉ lấy số lượng chưa đọc (Cho việc tự động refresh nhẹ nhàng)
 router.get('/count', isAuth, notificationController.getUnreadCount); 
 
-// PUT /api/notifications/:notificationId/read
-router.put('/:notificationId/read', isAuth, notificationController.markAsRead);
+// 3. Đánh dấu Đọc tất cả
+router.put('/read-all', isAuth, notificationController.markAllAsRead);
+
+// 4. Đánh dấu Đọc 1 tin cụ thể (Đặt route động ở cuối để tránh trùng lặp)
+router.put('/:id/read', isAuth, notificationController.markAsRead);
 
 module.exports = router;

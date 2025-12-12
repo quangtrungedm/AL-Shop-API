@@ -1,40 +1,50 @@
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
-    // ID người dùng nhận thông báo (required: false nếu là thông báo chung)
+    // ID người dùng nhận thông báo (User hoặc Admin)
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: false, 
+        required: true, // Nên bắt buộc để biết gửi cho ai
     },
-    // Tiêu đề ngắn gọn của thông báo (ví dụ: 'Đơn hàng #123 đã được xác nhận')
+    
     title: {
         type: String,
         required: true,
         trim: true,
     },
-    // Mô tả chi tiết (ví dụ: 'Sản phẩm của bạn đang được đóng gói.')
+    
     description: {
         type: String,
         required: true,
     },
-    // Loại thông báo (ví dụ: 'ORDER_STATUS', 'NEW_PRODUCT', 'PROMOTION')
+    
+    // 👇 QUAN TRỌNG: Thêm 'NEW_ORDER', 'ORDER_UPDATE', 'NEW_COMMENT' vào enum
     type: {
         type: String,
-        enum: ['ORDER_STATUS', 'NEW_PRODUCT', 'PROMOTION', 'SYSTEM'],
+        enum: [
+            'ORDER_STATUS', // Báo cho khách: Đơn hàng thay đổi
+            'NEW_PRODUCT',  // Báo chung: Có sản phẩm mới
+            'PROMOTION',    // Khuyến mãi
+            'SYSTEM',       // Hệ thống
+            'NEW_ORDER',    // 🔔 Báo cho Admin: Có khách đặt hàng
+            'ORDER_UPDATE', // Báo cho Admin: Đơn hoàn thành/hủy
+            'NEW_COMMENT'   // Báo cho Admin: Có bình luận mới
+        ],
         default: 'SYSTEM',
     },
-    // ID liên quan đến thông báo (ví dụ: Order ID, Product ID)
+    
     referenceId: {
         type: mongoose.Schema.Types.ObjectId,
         required: false,
     },
-    // Trạng thái đã đọc hay chưa
-    read: {
+    
+    // 👇 QUAN TRỌNG: Đổi tên thành 'isRead' để khớp với Frontend & Controller
+    isRead: {
         type: Boolean,
         default: false,
     },
-    // URL ảnh liên quan (ví dụ: ảnh sản phẩm)
+    
     image: {
         type: String,
         required: false,

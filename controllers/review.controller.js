@@ -1,70 +1,124 @@
-// controllers/review.controller.js
-
 const Review = require('../models/Review.model');
 const Product = require('../models/Product.model');
+const User = require('../models/User.model');
+const { createNotification } = require('../helpers/notification-helper');
 
-// 1. Thêm bình luận mới
+// 1. Thêm đánh giá (User) -> Báo cho Admin
 const addReview = async (req, res) => {
     try {
         const { productId, rating, comment } = req.body;
-        const userId = req.user._id; // Lấy từ token
+        const userId = req.user._id;
 
-        // Validate cơ bản
-        if (!productId || !rating || !comment) {
-            return res.status(400).json({ success: false, message: 'Vui lòng nhập đủ thông tin.' });
-        }
-
-        // Tạo review mới
-        const newReview = new Review({
+        // Tạo review
+        const newReview = await Review.create({
             user: userId,
             product: productId,
             rating: Number(rating),
             comment
         });
 
-        await newReview.save();
+        // --- GỬI THÔNG BÁO CHO ADMIN ---
+        const user = await User.findById(userId).select('name');
+        const product = await Product.findById(productId).select('name image');
+        const productImage = product?.image?.[0] || null;
 
-        // --- CẬP NHẬT ĐIỂM ĐÁNH GIÁ TRUNG BÌNH CHO SẢN PHẨM ---
-        // (Tính toán lại số sao trung bình để hiển thị ngoài trang chủ)
-        const reviews = await Review.find({ product: productId });
-        const totalRating = reviews.reduce((acc, item) => acc + item.rating, 0);
-        const avgRating = (totalRating / reviews.length).toFixed(1); // Làm tròn 1 số lẻ
+        // Tìm Admin đang bật thông báo
+        const admins = await User.find({ role: 'admin', 'settings.pushNotifications': true });
+        
+        if (admins.length > 0) {
+            admins.forEach(admin => {
+                createNotification({
+                    userId: admin._id,
+                    title: `💬 Đánh giá mới: ${rating}⭐`,
+                    description: `${user.name} vừa đánh giá "${product.name}".`,
+                    type: 'NEW_COMMENT', // Loại này sẽ điều hướng về trang Comments
+                    referenceId: newReview._id,
+                    image: productImage
+                });
+            });
+        }
 
-        // Update vào Product (Giả sử Product model có trường rating, nếu chưa có thì bỏ qua bước này)
-        // await Product.findByIdAndUpdate(productId, { rating: avgRating, numReviews: reviews.length });
-
-        // Populate thông tin user để trả về cho frontend hiển thị ngay
-        await newReview.populate('user', 'name avatar');
-
-        res.status(201).json({ 
-            success: true, 
-            message: 'Đánh giá thành công!', 
-            data: newReview 
-        });
+        res.status(201).json({ success: true, message: 'Đánh giá thành công!', data: newReview });
 
     } catch (error) {
-        console.error("ERROR ADD_REVIEW:", error);
-        res.status(500).json({ success: false, message: 'Lỗi server khi đánh giá.' });
+        // Bắt lỗi trùng lặp (đã đánh giá rồi)
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: 'Bạn đã đánh giá sản phẩm này rồi.' });
+        }
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 2. Lấy danh sách bình luận của 1 sản phẩm
+// 2. Lấy đánh giá theo sản phẩm (Public) - Chỉ lấy cái đang hiện (isActive: true)
 const getReviewsByProduct = async (req, res) => {
     try {
-        const { productId } = req.params;
-
-        const reviews = await Review.find({ product: productId })
-            .populate('user', 'name avatar') // Lấy tên và avatar người bình luận
-            .sort({ createdAt: -1 }); // Mới nhất lên đầu
-
+        const reviews = await Review.find({ product: req.params.productId, isActive: true })
+            .populate('user', 'name avatar')
+            .sort({ createdAt: -1 });
         res.status(200).json({ success: true, data: reviews });
     } catch (error) {
-        console.error("ERROR GET_REVIEWS:", error);
-        res.status(500).json({ success: false, message: 'Lỗi server tải bình luận.' });
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 3. ADMIN: Lấy TẤT CẢ đánh giá (để quản lý)
+const getAllReviews = async (req, res) => {
+    try {
+        const reviews = await Review.find()
+            .populate('user', 'name email')
+            .populate('product', 'name image')
+            .sort({ createdAt: -1 });
+        res.status(200).json({ success: true, data: reviews });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 4. ADMIN: Trả lời đánh giá
+const replyReview = async (req, res) => {
+    try {
+        const { reply } = req.body;
+        const review = await Review.findByIdAndUpdate(
+            req.params.id, 
+            { reply: reply }, 
+            { new: true }
+        );
+        res.status(200).json({ success: true, message: 'Đã trả lời.', data: review });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 5. ADMIN: Ẩn/Hiện đánh giá (Kiểm duyệt)
+const toggleReviewStatus = async (req, res) => {
+    try {
+        const { isActive } = req.body;
+        const review = await Review.findByIdAndUpdate(
+            req.params.id, 
+            { isActive: isActive }, 
+            { new: true }
+        );
+        res.status(200).json({ success: true, message: 'Đã cập nhật trạng thái.', data: review });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 6. ADMIN: Xóa đánh giá
+const deleteReview = async (req, res) => {
+    try {
+        await Review.findByIdAndDelete(req.params.id);
+        res.status(200).json({ success: true, message: 'Đã xóa đánh giá.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
 module.exports = {
     addReview,
-    getReviewsByProduct
+    getReviewsByProduct,
+    getAllReviews,
+    replyReview,
+    toggleReviewStatus,
+    deleteReview
 };

@@ -1,38 +1,27 @@
-// File: routes/order.route.js
-
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/order.controller');
-const { isAuth } = require('../middleware/auth'); 
 
-// ==================================================================
-// ⭐️ QUY TẮC VÀNG: ROUTE TĨNH (CỤ THỂ) PHẢI ĐẶT LÊN TRÊN ROUTE ĐỘNG (/:id)
-// ==================================================================
-
-// 1. Các Route Thống Kê & Analytics (Admin Dashboard)
-router.get('/get/count-all', orderController.getTotalOrders);
-router.get('/get/dashboard-stats', orderController.getDashboardStats);
-router.get('/get/analytics', orderController.getRevenueAnalytics);
-router.get('/get/order-analytics', orderController.getOrderAnalytics); // Đếm số đơn theo thời gian
-
-// 2. Route Đếm (User App)
+// 👇 1. Import Middleware vừa tạo
+const { isAuth, isAdmin } = require('../middleware/auth'); 
+if (!orderController) {
+    console.error("❌ LỖI: Không import được order.controller.js");
+}
+router.get('/get/count-all', isAuth, isAdmin, orderController.getTotalOrders);
+router.get('/get/dashboard-stats', isAuth, isAdmin, orderController.getDashboardStats);
+router.get('/get/analytics', isAuth, isAdmin, orderController.getRevenueAnalytics);
+router.get('/get/order-analytics', isAuth, isAdmin, orderController.getOrderVolumeAnalytics);
+// Đếm số đơn của user
 router.get('/count', isAuth, orderController.getOrderCount);
-
-// 3. Route Lấy Danh Sách Đơn Hàng (QUAN TRỌNG)
-// 👇 ĐÃ SỬA: Đưa route lấy đơn của User lên trên và đổi tên thành /get/userorders cho rõ ràng
+// Lấy danh sách đơn hàng của chính User đó
 router.get('/get/userorders', isAuth, orderController.getOrdersByUser); 
-
-// Admin gọi /api/orders (không tham số) -> Lấy tất cả
-router.get('/', orderController.getOrders); 
-
-// 4. Tạo đơn hàng mới
+// User tạo đơn hàng mới
 router.post('/', isAuth, orderController.createOrder);
-
-// 5. Cập nhật & Lấy chi tiết (Route động :id LUÔN LUÔN để cuối cùng)
-// PUT /api/orders/:id -> Cập nhật trạng thái
-router.put('/:id', isAuth, orderController.updateOrder); // Thêm isAuth nếu cần bảo mật
-
-// GET /api/orders/:id -> Lấy chi tiết 1 đơn
+// Lấy TẤT CẢ đơn hàng (Chỉ Admin mới được xem hết)
+router.get('/', isAuth, isAdmin, orderController.getOrders); 
+// Cập nhật trạng thái đơn hàng (Admin duyệt đơn)
+router.put('/:id', isAuth, isAdmin, orderController.updateOrder);
+// Lấy chi tiết 1 đơn hàng (Cần đăng nhập để controller check quyền sở hữu)
 router.get('/:id', isAuth, orderController.getOrderById);
 
 module.exports = router;

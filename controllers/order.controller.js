@@ -3,292 +3,292 @@ const Product = require('../models/Product.model');
 const User = require('../models/User.model'); 
 const { createNotification } = require('../helpers/notification-helper'); 
 
-// Hàm tiện ích: Lấy ID người dùng
+// --- HELPERS (Hàm hỗ trợ) ---
+
+// Lấy ID người dùng an toàn từ request
 const getUserId = (req) => req.user?._id || req.user?.id;
 
-// --- CONTROLLER FUNCTIONS ---
+// Tính toán thời gian cho biểu đồ thống kê
+const getDateRangeAndGroupBy = (type) => {
+    const today = new Date();
+    let startDate = new Date();
+    let groupBy = {};
 
-// 1. Lấy danh sách TẤT CẢ đơn hàng (Admin)
+    switch (type) {
+        case 'day': 
+            startDate.setHours(0, 0, 0, 0);
+            groupBy = { $hour: "$createdAt" };
+            break;
+        case 'week': 
+            startDate.setDate(today.getDate() - 6);
+            startDate.setHours(0, 0, 0, 0);
+            groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+            break;
+        case 'month': 
+            startDate.setDate(1);
+            startDate.setHours(0, 0, 0, 0);
+            groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+            break;
+        case 'year': 
+        default:
+            startDate.setMonth(0, 1);
+            startDate.setHours(0, 0, 0, 0);
+            groupBy = { $month: "$createdAt" };
+    }
+    return { startDate, groupBy };
+};
+
+// Hàm lấy ảnh đại diện của đơn hàng (ảnh sản phẩm đầu tiên)
+const getOrderImage = async (orderProducts) => {
+    if (orderProducts && orderProducts.length > 0) {
+        const firstProductItem = orderProducts[0];
+        // Nếu product là ID
+        const productId = firstProductItem.product._id || firstProductItem.product; 
+        
+        try {
+            const product = await Product.findById(productId).select('image').lean();
+            if (product && product.image && product.image.length > 0) {
+                return Array.isArray(product.image) ? product.image[0] : product.image;
+            }
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+};
+
+// ==========================================
+// 1. CÁC HÀM QUẢN LÝ ĐƠN HÀNG (CRUD)
+// ==========================================
+
+// Lấy toàn bộ đơn hàng (Cho Admin)
 const getOrders = async (req, res) => {
-    console.log("DEBUG ORDER: Getting all orders (Admin).");
     try {
         const orders = await Order.find()
             .populate('user', 'name email')
-            .populate('products.product', 'name price image')
-            .populate('shippingAddress')
-            .sort({ createdAt: -1 }); 
-        res.json({ success: true, data: orders });
-    } catch (error) {
-        console.error("ERROR GET_ORDERS:", error.message);
-        res.status(500).json({ success: false, message: "Failed to retrieve orders." });
-    }
-};
+            .populate({
+                path: 'products.product',
+                select: 'name price image category',
+                populate: { path: 'category', select: 'name' }
+            })
+            .sort({ createdAt: -1 })
+            .lean();
 
-// 2. Lấy danh sách đơn hàng CỦA TÔI (User)
-const getOrdersByUser = async (req, res) => {
-    const userId = getUserId(req); 
-    console.log(`DEBUG ORDER: Getting orders for User ID: ${userId}`);
-
-    try {
-        const orders = await Order.find({ user: userId }) 
-            .sort({ orderDate: -1 }) 
-            .populate('products.product', 'name price image')
-            .populate('shippingAddress'); 
-            
         res.status(200).json({ success: true, data: orders });
     } catch (error) {
-        console.error("ERROR GET_ORDERS_BY_USER:", error.message);
-        res.status(500).json({ success: false, message: "Failed to retrieve user's orders." });
+        console.error("Error getOrders:", error);
+        res.status(500).json({ success: false, message: "Lỗi lấy danh sách đơn hàng." });
     }
 };
 
-// 3. Tạo đơn hàng mới (TÍCH HỢP THÔNG BÁO)
-const createOrder = async (req, res) => {
-    console.log("DEBUG ORDER: Received new order request.");
+// Lấy đơn hàng của người dùng hiện tại
+const getOrdersByUser = async (req, res) => {
     try {
-        req.body.user = getUserId(req); 
-        
-        // Tạo đơn hàng mới
-        const newOrder = await Order.create(req.body); 
+        const userId = getUserId(req);
+        const orders = await Order.find({ user: userId })
+            .populate('products.product', 'name price image')
+            .sort({ createdAt: -1 })
+            .lean();
 
-        // --- LOGIC LẤY ẢNH SẢN PHẨM CHO THÔNG BÁO ---
-        let imageUrl = null;
-        const firstProductItem = newOrder.products[0];
-        
-        if (firstProductItem && firstProductItem.product) {
-            try {
-                // Lấy thông tin sản phẩm để lấy ảnh
-                const productDetail = await Product.findById(firstProductItem.product).select('image').lean();
-                // Lấy ảnh đầu tiên trong mảng ảnh
-                if (productDetail && productDetail.image && productDetail.image.length > 0) {
-                    imageUrl = Array.isArray(productDetail.image) ? productDetail.image[0] : productDetail.image;
-                }
-            } catch (imageError) {
-                console.warn("WARNING: Could not fetch product image details.", imageError.message);
-            }
-        }
-        
-        const orderId = newOrder._id;
-        const userId = getUserId(req); 
-        const orderTotal = newOrder.total ? newOrder.total.toFixed(2) : '0.00'; 
-        
-        // --- TẠO THÔNG BÁO ---
-        await createNotification({
-            userId: userId,
-            title: `Order #${orderId.toString().slice(-6)} confirmed!`,
-            description: `Order valued at $${orderTotal} is being processed.`,
-            type: 'ORDER_STATUS',
-            referenceId: orderId,
-            referenceModel: 'Order',
-            image: imageUrl, 
-        });
-
-        res.status(201).json({ 
-            success: true, 
-            data: newOrder, 
-            message: "Order placed successfully."
-        });
+        res.status(200).json({ success: true, data: orders });
     } catch (error) {
-        console.error("ERROR CREATE_ORDER:", error.message);
-        const statusCode = error.name === 'ValidationError' ? 400 : 500;
-        res.status(statusCode).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: "Lỗi lấy đơn hàng của bạn." });
     }
 };
 
-// 4. Lấy chi tiết đơn hàng
+// Lấy chi tiết 1 đơn hàng
 const getOrderById = async (req, res) => {
-    const orderId = req.params.id;
-    const userId = getUserId(req);
-    
-    const isUserAdmin = req.user?.role === 'admin'; 
-    let filter = { _id: orderId };
-    
-    if (!isUserAdmin) {
-        filter.user = userId; 
-    }
-
     try {
-        const order = await Order.findOne(filter)
+        const order = await Order.findById(req.params.id)
             .populate('user', 'name email')
             .populate('products.product', 'name price image')
-            .populate('shippingAddress'); 
-            
+            .populate('shippingAddress')
+            .lean();
+
         if (!order) {
-            return res.status(404).json({ success: false, message: 'Order not found or access denied.' });
+            return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng.' });
         }
-        res.json({ success: true, data: order });
+        res.status(200).json({ success: true, data: order });
     } catch (error) {
-        if (error.name === 'CastError') {
-             return res.status(400).json({ success: false, message: "Invalid Order ID." });
-        }
-        res.status(500).json({ success: false, message: "Failed to retrieve order details." });
+        res.status(500).json({ success: false, message: "Lỗi lấy chi tiết đơn hàng." });
     }
 };
 
-// 5. Cập nhật trạng thái đơn hàng (Admin)
+// --- TẠO ĐƠN HÀNG MỚI ---
+const createOrder = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        
+        // 1. Lưu đơn hàng
+        const newOrder = await Order.create({
+            ...req.body,
+            user: userId,
+        });
+
+        // 2. Lấy ảnh thumbnail (Non-blocking)
+        const imageUrl = await getOrderImage(newOrder.products);
+
+        // 3. Gửi Thông báo (Logic Mới)
+        
+        // A. Báo cho KHÁCH HÀNG
+        createNotification({
+            userId: userId,
+            title: `Đặt hàng thành công! #${newOrder._id.toString().slice(-6)}`,
+            description: `Tổng tiền: ${newOrder.total?.toLocaleString('en-US', {style:'currency', currency:'USD'})}. Chúng tôi đang xử lý đơn hàng.`,
+            type: 'ORDER_STATUS',
+            referenceId: newOrder._id,
+            image: imageUrl, 
+        }).catch(console.error);
+
+        // B. Báo cho ADMIN (Chỉ gửi cho ai ĐANG BẬT Push Notification)
+        const adminsToNotify = await User.find({ 
+            role: 'admin', 
+            'settings.pushNotifications': true 
+        }).select('_id');
+
+        if (adminsToNotify.length > 0) {
+            adminsToNotify.forEach(admin => {
+                createNotification({
+                    userId: admin._id,
+                    title: `📦 Đơn hàng mới: #${newOrder._id.toString().slice(-6)}`,
+                    description: `Khách hàng vừa đặt đơn trị giá ${newOrder.total?.toLocaleString('en-US', {style:'currency', currency:'USD'})}.`,
+                    type: 'NEW_ORDER',
+                    referenceId: newOrder._id,
+                    image: imageUrl
+                });
+            });
+        }
+
+        res.status(201).json({ success: true, data: newOrder, message: "Order placed successfully!" });
+
+    } catch (error) {
+        console.error("Create Order Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG ---
+// (Bao gồm logic "Nhận được hàng" -> Delivered)
 const updateOrder = async (req, res) => {
     try {
-        const order = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const { status } = req.body;
+        const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
         
-        if (!order) {
-            return res.status(404).json({ success: false, message: "Order not found." });
+        if (status && !validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: "Trạng thái không hợp lệ." });
         }
-        
-        res.json({ success: true, data: order });
+
+        // Cập nhật DB
+        const order = await Order.findByIdAndUpdate(
+            req.params.id, 
+            { status: status }, 
+            { new: true }
+        ).populate('user', 'name'); // Populate user để lấy tên hiển thị trong log nếu cần
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại." });
+        }
+
+        // --- LOGIC THÔNG BÁO THEO TRẠNG THÁI ---
+        if (status) {
+            const imageUrl = await getOrderImage(order.products);
+            const orderCode = order._id.toString().slice(-6).toUpperCase();
+            
+            let userTitle = `Cập nhật đơn hàng #${orderCode}`;
+            let userDesc = `Trạng thái đơn hàng của bạn đã chuyển sang: ${status.toUpperCase()}`;
+            
+            // Tùy chỉnh thông điệp cho hay hơn
+            if (status === 'shipped') {
+                userDesc = "Đơn hàng của bạn đang trên đường vận chuyển 🚚";
+            } else if (status === 'delivered') {
+                userTitle = "Giao hàng thành công! 🎉";
+                userDesc = "Bạn đã nhận được hàng. Hãy đánh giá sản phẩm để nhận xu nhé!";
+            } else if (status === 'cancelled') {
+                userTitle = "Đơn hàng đã bị hủy ❌";
+                userDesc = "Rất tiếc, đơn hàng của bạn đã bị hủy. Vui lòng liên hệ CSKH nếu cần hỗ trợ.";
+            }
+
+            // 1. Gửi cho User
+            createNotification({
+                userId: order.user._id,
+                title: userTitle,
+                description: userDesc,
+                type: 'ORDER_STATUS',
+                referenceId: order._id,
+                image: imageUrl
+            }).catch(console.error);
+
+            // 2. Gửi cho Admin (Chỉ khi Hoàn thành hoặc Hủy để Admin nắm tình hình)
+            if (status === 'delivered' || status === 'cancelled') {
+                const adminsToNotify = await User.find({ role: 'admin', 'settings.pushNotifications': true }).select('_id');
+                adminsToNotify.forEach(admin => {
+                    createNotification({
+                        userId: admin._id,
+                        title: `🔔 Cập nhật: #${orderCode} - ${status.toUpperCase()}`,
+                        description: `Đơn của ${order.user.name} đã chuyển sang trạng thái ${status}.`,
+                        type: 'ORDER_UPDATE',
+                        referenceId: order._id
+                    });
+                });
+            }
+        }
+
+        res.status(200).json({ success: true, data: order, message: "Cập nhật trạng thái thành công." });
     } catch (error) {
-        res.status(400).json({ success: false, message: "Invalid update request." });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 6. Đếm số lượng đơn hàng của user
-const getOrderCount = async (req, res) => {
-    const userId = getUserId(req); 
-    if (!userId) return res.status(401).json({ success: false, message: "Authentication required." });
+// ==========================================
+// 2. CÁC HÀM THỐNG KÊ (ANALYTICS)
+// ==========================================
 
-    try {
-        const count = await Order.countDocuments({ user: userId });
-        res.json({ success: true, count: count });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error." });
-    }
-};
-
-// 7. Lấy tổng số đơn hàng (Admin)
-const getTotalOrders = async (req, res) => {
-    try {
-        const orderCount = await Order.countDocuments(); 
-        res.status(200).json({ success: true, count: orderCount });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Failed to count total orders." });
-    }
-};
-
-// 8. Thống kê Dashboard (Admin)
 const getDashboardStats = async (req, res) => {
     try {
         const [orderStats, userCount, productCount] = await Promise.all([
             Order.aggregate([
-                {
-                    $group: {
-                        _id: null,
-                        totalOrders: { $sum: 1 },
-                        totalRevenue: { $sum: "$total" } 
-                    }
-                }
+                { $group: { _id: null, totalOrders: { $sum: 1 }, totalRevenue: { $sum: "$total" } } }
             ]),
             User.countDocuments(),
             Product.countDocuments()
         ]);
 
-        const resultOrder = orderStats.length > 0 ? orderStats[0] : { totalOrders: 0, totalRevenue: 0 };
+        const stats = orderStats[0] || { totalOrders: 0, totalRevenue: 0 };
 
         res.status(200).json({ 
             success: true, 
-            data: {
-                orders: resultOrder.totalOrders,
-                revenue: resultOrder.totalRevenue,
-                users: userCount,
-                products: productCount
-            }
+            data: { orders: stats.totalOrders, revenue: stats.totalRevenue, users: userCount, products: productCount }
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Failed to get dashboard stats." });
+        res.status(500).json({ success: false, message: "Lỗi thống kê." });
     }
 };
 
-// 9. Thống kê doanh thu biểu đồ (Admin)
 const getRevenueAnalytics = async (req, res) => {
     try {
-        const { type } = req.query; 
-        const today = new Date();
-        let startDate = new Date();
-        let groupBy = {};
-        
-        switch (type) {
-            case 'day':
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $hour: "$createdAt" };
-                break;
-            case 'week':
-                startDate.setDate(today.getDate() - 6);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'month':
-                startDate.setDate(1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'year':
-                startDate.setMonth(0, 1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $month: "$createdAt" };
-                break;
-            default:
-                startDate.setMonth(0, 1);
-                groupBy = { $month: "$createdAt" };
-        }
+        const { type } = req.query;
+        const { startDate, groupBy } = getDateRangeAndGroupBy(type);
 
         const stats = await Order.aggregate([
             { $match: { createdAt: { $gte: startDate } } },
-            {
-                $group: {
-                    _id: groupBy, 
-                    totalSales: { $sum: "$total" } 
-                }
-            },
+            { $group: { _id: groupBy, totalSales: { $sum: "$total" } } },
             { $sort: { _id: 1 } } 
         ]);
 
         res.status(200).json({ success: true, data: stats });
-
     } catch (error) {
-        
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 10. Thống kê số lượng đơn hàng theo thời gian (Admin)
-const getOrderAnalytics = async (req, res) => {
+const getOrderVolumeAnalytics = async (req, res) => {
     try {
         const { type } = req.query;
-        const today = new Date();
-        let startDate = new Date();
-        let groupBy = {};
-
-        switch (type) {
-            case 'day':
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $hour: "$createdAt" };
-                break;
-            case 'week':
-                startDate.setDate(today.getDate() - 6);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'month':
-                startDate.setDate(1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-                break;
-            case 'year':
-                startDate.setMonth(0, 1);
-                startDate.setHours(0, 0, 0, 0);
-                groupBy = { $month: "$createdAt" };
-                break;
-            default:
-                startDate.setMonth(0, 1);
-                groupBy = { $month: "$createdAt" };
-        }
+        const { startDate, groupBy } = getDateRangeAndGroupBy(type);
 
         const stats = await Order.aggregate([
             { $match: { createdAt: { $gte: startDate } } },
-            {
-                $group: {
-                    _id: groupBy,
-                    totalOrders: { $sum: 1 }
-                }
-            },
+            { $group: { _id: groupBy, totalOrders: { $sum: 1 } } },
             { $sort: { _id: 1 } }
         ]);
 
@@ -298,16 +298,34 @@ const getOrderAnalytics = async (req, res) => {
     }
 };
 
+const getTotalOrders = async (req, res) => {
+    try {
+        const count = await Order.countDocuments();
+        res.status(200).json({ success: true, count });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getOrderCount = async (req, res) => {
+    const userId = getUserId(req);
+    try {
+        const count = await Order.countDocuments({ user: userId });
+        res.json({ success: true, count });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 module.exports = {
-    getOrders,          
-    getOrdersByUser,    
-    createOrder,
+    getOrders,
+    getOrdersByUser,
     getOrderById,
+    createOrder,
     updateOrder,
-    getOrderCount,
-    getTotalOrders,
-    getRevenueAnalytics,
     getDashboardStats,
-    getOrderAnalytics
+    getRevenueAnalytics,
+    getOrderVolumeAnalytics,
+    getTotalOrders,
+    getOrderCount
 };

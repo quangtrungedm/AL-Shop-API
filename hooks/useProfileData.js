@@ -1,6 +1,5 @@
-// File: hooks/useProfileData.js 
-
 import { useState, useEffect } from 'react';
+// ⚠️ Đảm bảo rằng client được import đúng
 import client from '../api/client'; 
 import { useAuth } from '../context/AuthContext';
 
@@ -10,47 +9,41 @@ const useProfileData = () => {
     // States cho Dữ liệu
     const [orderCount, setOrderCount] = useState(0);
     const [addressCount, setAddressCount] = useState(0);
-    const [cardCount, setCardCount] = useState(0); 
-
+    const [cardCount, setCardCount] = useState(0); // Vẫn là Mockup
+    
     // States cho Trạng thái tải
     const [isCounting, setIsCounting] = useState(true);
 
-    // --- CÁC HÀM FETCH API (ĐÃ THÊM LOG BẮT LỖI CHI TIẾT) ---
-
-    // Hàm chung để lấy headers
+    // Hàm chung để lấy headers (sử dụng Token)
     const getAuthHeaders = () => ({
         headers: { Authorization: `Bearer ${token}` }
     });
 
     // 1. Fetch số lượng Đơn hàng (GET /orders/count)
     const fetchOrderCountAPI = async () => {
-        if (!token) {
-            console.warn("[DEBUG HOOK] ⚠️ Không có token, bỏ qua fetch /orders/count.");
-            return 0;
-        }
+        if (!token) return 0;
         try {
-            console.log("-> Đang fetch /orders/count...");
+            // ⭐ ĐIỂM CẦN LƯU Ý: Endpoint /api/orders/count là từ backend (Node.js)
             const response = await client.get('/orders/count', getAuthHeaders());
-            const count = response.data?.count || 0;
+            // Backend trả về { success: true, count: number }
+            const count = response.data?.count || 0; 
             console.log(`✅ [DEBUG HOOK] /orders/count: Thành công, Count = ${count}`);
             return count;
         } catch (e) { 
-            // Bắt lỗi chi tiết từ Axios
             const errorMsg = e.response?.data?.message || e.message || "Lỗi không xác định";
             console.error(`❌ [DEBUG HOOK] Lỗi API /orders/count (Status: ${e.response?.status || 'N/A'}):`, errorMsg);
+            // Trả về 0 nếu thất bại
             return 0; 
         }
     };
 
     // 2. Fetch số lượng Địa chỉ (GET /addresses/count)
     const fetchAddressCountAPI = async () => {
-        if (!token) {
-            console.warn("[DEBUG HOOK] ⚠️ Không có token, bỏ qua fetch /addresses/count.");
-            return 0;
-        }
+        if (!token) return 0;
         try {
-            console.log("-> Đang fetch /addresses/count...");
+            // ⭐ ĐIỂM CẦN LƯU Ý: Endpoint /api/addresses/count là từ backend (Node.js)
             const response = await client.get('/addresses/count', getAuthHeaders());
+            // Backend trả về { success: true, count: number }
             const count = response.data?.count || 0;
             console.log(`✅ [DEBUG HOOK] /addresses/count: Thành công, Count = ${count}`);
             return count;
@@ -61,15 +54,14 @@ const useProfileData = () => {
         }
     };
     
-    // 3. Fetch số lượng Thẻ/Payment Methods (Mockup)
+    // 3. Fetch số lượng Thẻ/Payment Methods (Mockup/Fake)
     const fetchCardCountAPI = async () => {
-        // Giả lập độ trễ và trả về giá trị cố định
+        // Mockup: Giả lập độ trễ 500ms và trả về giá trị cố định
         await new Promise(resolve => setTimeout(resolve, 500)); 
         return 2;
     };
 
     // --- EFFECT CHÍNH ---
-
     useEffect(() => {
         if (!user || !token) {
             console.log("[DEBUG HOOK] 🚫 User hoặc Token không tồn tại. Bỏ qua Load Counts.");
@@ -82,11 +74,11 @@ const useProfileData = () => {
         const loadAllCounts = async () => {
             setIsCounting(true);
             
-            // Chạy tất cả các promises song song
+            // Chạy tất cả các promises song song để tối ưu hóa hiệu suất
             const results = await Promise.all([
                 fetchOrderCountAPI(),
                 fetchAddressCountAPI(),
-                fetchCardCountAPI(),
+                fetchCardCountAPI(), // Mockup
             ]);
 
             // Cập nhật trạng thái
@@ -99,7 +91,7 @@ const useProfileData = () => {
         };
 
         loadAllCounts();
-    }, [user, token]);
+    }, [user, token]); // Dependencies: Chạy lại khi user hoặc token thay đổi
 
     return {
         orderCount,
